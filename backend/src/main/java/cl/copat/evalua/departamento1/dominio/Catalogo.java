@@ -10,8 +10,8 @@ public final class Catalogo {
 
   public static final List<String> ESTADOS = List.of(
       "solicitud creada",
-      "solicitud enviada",
-      "solicitud enviada a revision",
+      "solicitud enviada a cliente",
+      "solicitud en revision",
       "solicitud aprobada",
       "rechazada");
 

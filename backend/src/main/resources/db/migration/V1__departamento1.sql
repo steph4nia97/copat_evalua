@@ -131,7 +131,7 @@ INSERT INTO plantilla (id, nombre) VALUES
 
 INSERT INTO estado_solicitud (id, nombre) VALUES
   (1, 'solicitud creada'),
-  (2, 'solicitud enviada'),
-  (3, 'solicitud enviada a revision'),
+  (2, 'solicitud enviada a cliente'),
+  (3, 'solicitud en revision'),
   (4, 'solicitud aprobada'),
   (5, 'rechazada');

@@ -32,8 +32,8 @@ type Movimiento = {
 
 const colores: Record<string, string> = {
   "solicitud creada": "bg-emerald-100 text-emerald-900",
-  "solicitud enviada": "bg-sky-100 text-sky-900",
-  "solicitud enviada a revision": "bg-amber-100 text-amber-900",
+  "solicitud enviada a cliente": "bg-sky-100 text-sky-900",
+  "solicitud en revision": "bg-amber-100 text-amber-900",
   "solicitud aprobada": "bg-teal-100 text-teal-900",
   rechazada: "bg-rose-100 text-rose-900",
 };

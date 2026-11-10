@@ -147,7 +147,7 @@ class Departamento1IntegracionTest {
     assertThat(creadas).hasSize(1);
 
     for (String estado : new String[] {
-        "solicitud enviada", "solicitud enviada a revision", "solicitud aprobada", "rechazada"}) {
+        "solicitud enviada a cliente", "solicitud en revision", "solicitud aprobada", "rechazada"}) {
       JsonNode vacia = json.readTree(mockMvc.perform(get("/api/departamento1/solicitudes")
               .param("estado", estado).session(sesion))
           .andReturn().getResponse().getContentAsString());
