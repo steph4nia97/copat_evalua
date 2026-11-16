@@ -1,4 +1,8 @@
 spring:
+  servlet:
+    multipart:
+      max-file-size: 8MB
+      max-request-size: 10MB
   datasource:
     url: jdbc:postgresql://localhost:5432/copat_evalua
     username: copat
@@ -27,3 +31,6 @@ server:
 
 copat:
   zona: America/Santiago
+  publica: http://localhost:5173
+  correo:
+    desde: evaluaciones@copat.cl

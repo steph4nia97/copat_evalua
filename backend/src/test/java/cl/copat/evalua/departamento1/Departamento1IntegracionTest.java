@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.Cookie;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,8 +51,20 @@ class Departamento1IntegracionTest {
 
   @BeforeEach
   void limpiar() throws Exception {
+    jdbc.update("DELETE FROM registro_actividad");
+    jdbc.update("DELETE FROM rechazo_solicitud");
+    jdbc.update("DELETE FROM evidencia_revision");
+    jdbc.update("DELETE FROM revision_departamento3");
+    jdbc.update("DELETE FROM notificacion");
+    jdbc.update("DELETE FROM solicitud_evaluacion");
+    jdbc.update("DELETE FROM solicitud_pdf");
     jdbc.update("DELETE FROM solicitud_log");
+    jdbc.update("DELETE FROM solicitud_sede");
     jdbc.update("DELETE FROM solicitud");
+    jdbc.update("""
+        DELETE FROM usuario
+        WHERE email NOT IN ('semilla1@copat.cl', 'semilla2@copat.cl', 'semilla3@copat.cl', 'admin@copat.cl')
+        """);
     MvcResult preparacion = mockMvc.perform(get("/api/auth/csrf")).andReturn();
     csrf = preparacion.getResponse().getCookie("XSRF-TOKEN");
     assertThat(csrf).isNotNull();
@@ -85,9 +98,10 @@ class Departamento1IntegracionTest {
     MvcResult creada = crear(sesion, solicitud("Empresa Uno", "12.345.678-5", "01/01/2026", "31/01/2026"));
     assertThat(creada.getResponse().getStatus()).isEqualTo(201);
     JsonNode cuerpo = json.readTree(creada.getResponse().getContentAsString());
-    assertThat(cuerpo.get("estado").asText()).isEqualTo("solicitud creada");
+    assertThat(cuerpo.get("estado").asText()).isEqualTo("solicitud ingresada");
     assertThat(cuerpo.get("rut").asText()).isEqualTo("12.345.678-5");
     assertThat(cuerpo.get("plantilla").asText()).isEqualTo("Guia evaluacion");
+    assertThat(json.convertValue(cuerpo.get("sedes"), String[].class)).containsExactly("Antofagasta", "Calama");
 
     String estadoEnBase = jdbc.queryForObject(
         "select e.nombre from solicitud s join estado_solicitud e on e.id = s.estado_id",
@@ -96,12 +110,7 @@ class Departamento1IntegracionTest {
 
     JsonNode log = json.readTree(mockMvc.perform(get("/api/departamento1/bitacora").session(sesion))
         .andReturn().getResponse().getContentAsString());
-    assertThat(log).hasSize(1);
-    assertThat(log.get(0).get("accion").asText()).isEqualTo("Solicitud creada");
-    assertThat(log.get(0).get("usuario").asText()).isEqualTo("Semilla Uno (semilla1@copat.cl)");
-    assertThat(log.get(0).get("fecha").asText())
-        .isEqualTo(Fechas.format(LocalDate.now(ZoneId.of("America/Santiago"))));
-    assertThat(log.get(0).get("hora").asText()).matches("\\d{2}:\\d{2}:\\d{2}");
+    assertThat(log).isEmpty();
   }
 
   @Test
@@ -111,7 +120,7 @@ class Departamento1IntegracionTest {
     cuerpo.put("estado", "solicitud aprobada");
     MvcResult creada = crear(sesion, cuerpo);
     assertThat(json.readTree(creada.getResponse().getContentAsString()).get("estado").asText())
-        .isEqualTo("solicitud creada");
+        .isEqualTo("solicitud ingresada");
   }
 
   @Test
@@ -142,12 +151,12 @@ class Departamento1IntegracionTest {
     assertThat(json.convertValue(estados, String[].class)).containsExactly(Catalogo.ESTADOS.toArray(String[]::new));
 
     JsonNode creadas = json.readTree(mockMvc.perform(get("/api/departamento1/solicitudes")
-            .param("estado", "solicitud creada").session(sesion))
+            .param("estado", "solicitud ingresada").session(sesion))
         .andReturn().getResponse().getContentAsString());
     assertThat(creadas).hasSize(1);
 
     for (String estado : new String[] {
-        "solicitud enviada a cliente", "solicitud en revision", "solicitud aprobada", "rechazada"}) {
+        "solicitud enviada a cliente", "solicitud en revision", "solicitud aprobada", "solicitud rechazada"}) {
       JsonNode vacia = json.readTree(mockMvc.perform(get("/api/departamento1/solicitudes")
               .param("estado", estado).session(sesion))
           .andReturn().getResponse().getContentAsString());
@@ -166,6 +175,7 @@ class Departamento1IntegracionTest {
         "periodoInicio", "31/02/2026",
         "periodoFin", "01/13/2026",
         "plantilla", "Otra guia",
+        "sedes", List.of("Otra sede"),
         "descripcion", "x".repeat(301));
     MvcResult respuesta = crear(sesion, invalida);
     assertThat(respuesta.getResponse().getStatus()).isEqualTo(400);
@@ -177,6 +187,7 @@ class Departamento1IntegracionTest {
     assertThat(campos.get("periodoInicio").asText()).isEqualTo(Mensajes.FECHA_INICIO);
     assertThat(campos.get("periodoFin").asText()).isEqualTo(Mensajes.FECHA_FIN);
     assertThat(campos.get("plantilla").asText()).isEqualTo(Mensajes.PLANTILLA);
+    assertThat(campos.get("sedes").asText()).isEqualTo(Mensajes.SEDE);
     assertThat(campos.get("descripcion").asText()).isEqualTo(Mensajes.DESCRIPCION);
 
     Map<String, Object> periodo = solicitud("Empresa Uno", "12.345.678-5", "31/03/2026", "01/01/2026");
@@ -187,7 +198,8 @@ class Departamento1IntegracionTest {
 
   @Test
   void laBaseImpideRutInvalidoYNombreConSimbolos() {
-    Long usuarioId = jdbc.queryForObject("select id from usuario", Long.class);
+    Long usuarioId = jdbc.queryForObject(
+        "select id from usuario where email = ?", Long.class, "semilla1@copat.cl");
     assertThatThrownBy(() -> jdbc.update("""
         insert into solicitud (
           nombre_empresa, rut, correo, periodo_inicio, periodo_fin,
@@ -246,6 +258,7 @@ class Departamento1IntegracionTest {
     cuerpo.put("periodoInicio", inicio);
     cuerpo.put("periodoFin", fin);
     cuerpo.put("plantilla", "Guia evaluacion");
+    cuerpo.put("sedes", List.of("Calama", "Antofagasta"));
     cuerpo.put("descripcion", "Evaluación del período");
     return cuerpo;
   }

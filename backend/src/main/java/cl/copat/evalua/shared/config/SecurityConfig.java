@@ -50,6 +50,9 @@ public class SecurityConfig {
         .authorizeHttpRequests(auth -> auth
             .requestMatchers(new AntPathRequestMatcher("/api/auth/login", HttpMethod.POST.name())).permitAll()
             .requestMatchers(new AntPathRequestMatcher("/api/auth/csrf", HttpMethod.GET.name())).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/publico/encuestas/*", HttpMethod.GET.name())).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/publico/encuestas/*", HttpMethod.POST.name())).permitAll()
+            .requestMatchers(new AntPathRequestMatcher("/api/publico/reclamos", HttpMethod.POST.name())).permitAll()
             .requestMatchers("/api/**").authenticated()
             .anyRequest().denyAll())
         .exceptionHandling(ex -> ex

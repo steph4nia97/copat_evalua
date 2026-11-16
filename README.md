@@ -1,6 +1,6 @@
 # Copat evalua
 
-Monolito modular. Este corte cubre solo **Departamento 1**: ingreso de sesión, creación de una solicitud en estado `solicitud creada` y su bitácora.
+Monolito modular. Cubre Departamento 1 (crear solicitudes), Departamento 2 (contacto y envío a revisión con PDF) y Departamento 3 (revisión de la guía).
 
 ## Requisitos
 
@@ -20,10 +20,11 @@ La aplicación queda en http://localhost:5173. La API escucha en el puerto 8080 
 
 Base de datos local: `copat` / `copat` en `localhost:5432/copat_evalua`.
 
-## Usuario semilla
+## Usuarios semilla
 
-- Correo: `semilla1@copat.cl`
-- Contraseña: `semilla1`
+- Departamento 1: `semilla1@copat.cl` / `semilla1`
+- Departamento 2: `semilla2@copat.cl` / `semilla2`
+- Departamento 3: `semilla3@copat.cl` / `semilla3`
 
 La contraseña se guarda con BCrypt. Un ingreso fallido responde siempre `Correo o contraseña incorrectos.`
 

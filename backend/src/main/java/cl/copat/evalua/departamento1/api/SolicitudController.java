@@ -34,6 +34,11 @@ public class SolicitudController {
     return solicitudes.plantillas();
   }
 
+  @GetMapping("/sedes")
+  public List<String> sedes() {
+    return solicitudes.sedes();
+  }
+
   @GetMapping("/solicitudes")
   public List<SolicitudResponse> listar(@RequestParam(required = false) String estado, Authentication authentication) {
     return solicitudes.listar(estado, principal(authentication));

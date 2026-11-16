@@ -27,11 +27,31 @@ public class Usuario {
   @Column(nullable = false, length = 80)
   private String nombre;
 
+  @Column(name = "clave_provisoria", nullable = false)
+  private boolean claveProvisoria;
+
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "departamento_id", nullable = false)
   private Departamento departamento;
 
   protected Usuario() {}
+
+  public Usuario(String email, String passwordHash, String nombre, Departamento departamento, boolean claveProvisoria) {
+    this.email = email;
+    this.passwordHash = passwordHash;
+    this.nombre = nombre;
+    this.departamento = departamento;
+    this.claveProvisoria = claveProvisoria;
+  }
+
+  public void renombrar(String nombre) {
+    this.nombre = nombre;
+  }
+
+  public void cambiarClave(String passwordHash) {
+    this.passwordHash = passwordHash;
+    this.claveProvisoria = false;
+  }
 
   public Long getId() {
     return id;
@@ -47,6 +67,10 @@ public class Usuario {
 
   public String getNombre() {
     return nombre;
+  }
+
+  public boolean isClaveProvisoria() {
+    return claveProvisoria;
   }
 
   public Departamento getDepartamento() {

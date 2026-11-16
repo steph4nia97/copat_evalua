@@ -14,6 +14,8 @@ import cl.copat.evalua.departamento1.persistencia.EstadoSolicitud;
 import cl.copat.evalua.departamento1.persistencia.EstadoSolicitudRepository;
 import cl.copat.evalua.departamento1.persistencia.Plantilla;
 import cl.copat.evalua.departamento1.persistencia.PlantillaRepository;
+import cl.copat.evalua.departamento1.persistencia.Sede;
+import cl.copat.evalua.departamento1.persistencia.SedeRepository;
 import cl.copat.evalua.departamento1.persistencia.Solicitud;
 import cl.copat.evalua.departamento1.persistencia.SolicitudLog;
 import cl.copat.evalua.departamento1.persistencia.SolicitudLogRepository;
@@ -21,17 +23,23 @@ import cl.copat.evalua.departamento1.persistencia.SolicitudRepository;
 import cl.copat.evalua.departamento1.persistencia.Usuario;
 import cl.copat.evalua.departamento1.persistencia.UsuarioRepository;
 import cl.copat.evalua.departamento1.seguridad.UsuarioPrincipal;
+import cl.copat.evalua.shared.aplicacion.ActividadService;
+import cl.copat.evalua.shared.persistencia.RegistroActividad;
+import cl.copat.evalua.shared.persistencia.RegistroActividadRepository;
 import cl.copat.evalua.shared.web.PeriodoDuplicadoException;
 import cl.copat.evalua.shared.web.ReglaNegocioException;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.LocalDate;
 import java.time.LocalTime;
-import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -48,7 +56,10 @@ public class SolicitudService {
   private final SolicitudLogRepository bitacora;
   private final UsuarioRepository usuarios;
   private final PlantillaRepository plantillas;
+  private final SedeRepository sedes;
   private final EstadoSolicitudRepository estados;
+  private final ActividadService actividad;
+  private final RegistroActividadRepository registros;
   private final Clock reloj;
 
   public SolicitudService(
@@ -56,13 +67,19 @@ public class SolicitudService {
       SolicitudLogRepository bitacora,
       UsuarioRepository usuarios,
       PlantillaRepository plantillas,
+      SedeRepository sedes,
       EstadoSolicitudRepository estados,
+      ActividadService actividad,
+      RegistroActividadRepository registros,
       Clock reloj) {
     this.solicitudes = solicitudes;
     this.bitacora = bitacora;
     this.usuarios = usuarios;
     this.plantillas = plantillas;
+    this.sedes = sedes;
     this.estados = estados;
+    this.actividad = actividad;
+    this.registros = registros;
     this.reloj = reloj;
   }
 
@@ -72,6 +89,10 @@ public class SolicitudService {
 
   public List<String> plantillas() {
     return plantillas.findAllByOrderByIdAsc().stream().map(Plantilla::getNombre).toList();
+  }
+
+  public List<String> sedes() {
+    return sedes.findAllByOrderByIdAsc().stream().map(Sede::getNombre).toList();
   }
 
   public List<SolicitudResponse> listar(String estado, UsuarioPrincipal principal) {
@@ -88,8 +109,53 @@ public class SolicitudService {
 
   public List<BitacoraResponse> bitacora(UsuarioPrincipal principal) {
     exigirDepartamento(principal);
-    return bitacora.listar(Catalogo.DEPARTAMENTO_1).stream().map(this::aBitacora).toList();
+    return movimientos(true);
   }
+
+  public List<BitacoraResponse> bitacoraSeguimiento(UsuarioPrincipal principal) {
+    short departamento = principal.departamentoId();
+    if (!Catalogo.operaSolicitudes(departamento) && departamento != Catalogo.DEPARTAMENTO_3) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, Mensajes.PROHIBIDO);
+    }
+    return movimientos(Catalogo.operaSolicitudes(departamento));
+  }
+
+  private List<BitacoraResponse> movimientos(boolean operacion) {
+    List<Fila> filas = new ArrayList<>();
+    for (SolicitudLog log : bitacora.listar(Catalogo.DEPARTAMENTO_1)) {
+      String accion = Catalogo.etiquetaBitacora(log.getAccion(), operacion);
+      if (accion == null) {
+        continue;
+      }
+      filas.add(new Fila(log.getFecha(), log.getHora(), log.getId(), aBitacora(log, accion)));
+    }
+    for (RegistroActividad registro : registros.porAcciones(
+        List.of(Catalogo.ACCION_CARGA_CLIENTES, Catalogo.ACCION_CARGA_CONTACTOS))) {
+      String detalle = registro.getDetalle();
+      String accion = registro.getAccion();
+      if (detalle != null && !detalle.isBlank() && !detalle.equals(accion)) {
+        accion = accion + " · " + detalle;
+      }
+      filas.add(new Fila(
+          registro.getFecha(),
+          registro.getHora(),
+          -registro.getId(),
+          new BitacoraResponse(
+              -registro.getId(),
+              0,
+              "—",
+              "—",
+              "—",
+              Fechas.format(registro.getFecha()),
+              registro.getHora().format(HORA),
+              firmar(registro.getUsuario()),
+              accion)));
+    }
+    filas.sort(Comparator.comparing(Fila::fecha).thenComparing(Fila::hora).thenComparing(Fila::orden).reversed());
+    return filas.stream().map(Fila::respuesta).toList();
+  }
+
+  private record Fila(LocalDate fecha, LocalTime hora, long orden, BitacoraResponse respuesta) {}
 
   @Transactional
   public SolicitudResponse crear(CrearSolicitudRequest request, UsuarioPrincipal principal) {
@@ -112,6 +178,11 @@ public class SolicitudService {
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, Mensajes.SESION));
     Plantilla plantilla = plantillas.findByNombre(request.plantilla().trim())
         .orElseThrow(() -> new ReglaNegocioException(Mensajes.PLANTILLA, Map.of("plantilla", Mensajes.PLANTILLA)));
+    List<String> nombresSede = normalizarSedes(request.sedes());
+    List<Sede> encontradas = sedes.findByNombreIn(nombresSede);
+    if (encontradas.size() != nombresSede.size()) {
+      throw new ReglaNegocioException(Mensajes.SEDE, Map.of("sedes", Mensajes.SEDE));
+    }
     EstadoSolicitud estado = estados.findByNombre(Catalogo.ESTADO_INICIAL)
         .orElseThrow(() -> new IllegalStateException("Falta el estado inicial"));
 
@@ -127,16 +198,11 @@ public class SolicitudService {
         estado,
         usuario.getDepartamento(),
         usuario);
+    solicitud.asignarSedes(encontradas);
 
-    ZonedDateTime ahora = ZonedDateTime.now(reloj);
     try {
       solicitudes.saveAndFlush(solicitud);
-      bitacora.saveAndFlush(new SolicitudLog(
-          solicitud,
-          ahora.toLocalDate(),
-          ahora.toLocalTime().withNano(0),
-          usuario,
-          Catalogo.ACCION_CREADA));
+      actividad.anotar(solicitud, usuario, Catalogo.ACCION_CREADA, solicitud.getNombreEmpresa());
     } catch (DataIntegrityViolationException ex) {
       if (esDuplicado(ex)) {
         throw new PeriodoDuplicadoException();
@@ -186,6 +252,12 @@ public class SolicitudService {
     } else if (!Catalogo.PLANTILLAS.contains(request.plantilla().trim())) {
       campos.put("plantilla", Mensajes.PLANTILLA);
     }
+    List<String> nombresSede = normalizarSedes(request.sedes());
+    if (nombresSede.isEmpty()) {
+      campos.put("sedes", Mensajes.SEDE_REQUERIDA);
+    } else if (!new LinkedHashSet<>(Catalogo.SEDES).containsAll(nombresSede)) {
+      campos.put("sedes", Mensajes.SEDE);
+    }
     String descripcion = normalizarDescripcion(request.descripcion());
     if (descripcion != null && descripcion.length() > 300) {
       campos.put("descripcion", Mensajes.DESCRIPCION);
@@ -193,6 +265,23 @@ public class SolicitudService {
     if (!campos.isEmpty()) {
       throw new ReglaNegocioException(Mensajes.REVISE, campos);
     }
+  }
+
+  private static List<String> normalizarSedes(List<String> sedes) {
+    if (sedes == null) {
+      return List.of();
+    }
+    Set<String> unicas = new LinkedHashSet<>();
+    for (String sede : sedes) {
+      if (sede == null) {
+        continue;
+      }
+      String limpia = sede.trim();
+      if (!limpia.isEmpty()) {
+        unicas.add(limpia);
+      }
+    }
+    return List.copyOf(unicas);
   }
 
   private static String normalizarDescripcion(String valor) {
@@ -204,7 +293,7 @@ public class SolicitudService {
   }
 
   private void exigirDepartamento(UsuarioPrincipal principal) {
-    if (principal.departamentoId() != Catalogo.DEPARTAMENTO_1) {
+    if (!Catalogo.operaSolicitudes(principal.departamentoId())) {
       throw new ResponseStatusException(HttpStatus.FORBIDDEN, Mensajes.PROHIBIDO);
     }
   }
@@ -219,12 +308,19 @@ public class SolicitudService {
         Fechas.format(solicitud.getPeriodoInicio()),
         Fechas.format(solicitud.getPeriodoFin()),
         solicitud.getPlantilla().getNombre(),
+        solicitud.nombresSedes(),
         solicitud.getDescripcion(),
         solicitud.getEstado().getNombre(),
-        firmar(solicitud.getCreadoPor()));
+        firmar(solicitud.getCreadoPor()),
+        null,
+        null,
+        false,
+        null,
+        null,
+        Catalogo.vistaOperacion(solicitud.getSeguimiento()));
   }
 
-  private BitacoraResponse aBitacora(SolicitudLog log) {
+  private BitacoraResponse aBitacora(SolicitudLog log, String accion) {
     Solicitud solicitud = log.getSolicitud();
     return new BitacoraResponse(
         log.getId(),
@@ -235,7 +331,7 @@ public class SolicitudService {
         Fechas.format(log.getFecha()),
         log.getHora().format(HORA),
         firmar(log.getUsuario()),
-        log.getAccion());
+        accion);
   }
 
   private static String firmar(Usuario usuario) {

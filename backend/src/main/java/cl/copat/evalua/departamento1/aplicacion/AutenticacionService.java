@@ -26,7 +26,12 @@ public class AutenticacionService {
     String email = correo == null ? "" : correo.trim().toLowerCase(Locale.ROOT);
     String clave = contrasena == null ? "" : contrasena;
     Usuario usuario = usuarios.findByEmailIgnoreCase(email).orElse(null);
-    if (usuario == null || usuario.getDepartamento().getId() != Catalogo.DEPARTAMENTO_1) {
+    short departamento = usuario == null ? 0 : usuario.getDepartamento().getId();
+    if (usuario == null
+        || (departamento != Catalogo.DEPARTAMENTO_1
+            && departamento != Catalogo.DEPARTAMENTO_2
+            && departamento != Catalogo.DEPARTAMENTO_3
+            && departamento != Catalogo.DEPARTAMENTO_ADMIN)) {
       passwordEncoder.matches(clave, hashFicticio);
       throw new BadCredentialsException("fail");
     }

@@ -7,9 +7,17 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
 import jakarta.persistence.ManyToOne;
+import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import java.time.LocalDate;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 @Entity
 @Table(name = "solicitud")
@@ -55,6 +63,20 @@ public class Solicitud {
   @ManyToOne(fetch = FetchType.LAZY, optional = false)
   @JoinColumn(name = "creado_por_id", nullable = false)
   private Usuario creadoPor;
+
+  @ManyToMany(fetch = FetchType.LAZY)
+  @JoinTable(
+      name = "solicitud_sede",
+      joinColumns = @JoinColumn(name = "solicitud_id"),
+      inverseJoinColumns = @JoinColumn(name = "sede_id"))
+  @OrderBy("id ASC")
+  private Set<Sede> sedes = new LinkedHashSet<>();
+
+  @Column(name = "veces_rechazada", nullable = false)
+  private int vecesRechazada;
+
+  @Column(length = 40)
+  private String seguimiento;
 
   protected Solicitud() {}
 
@@ -129,5 +151,34 @@ public class Solicitud {
 
   public Usuario getCreadoPor() {
     return creadoPor;
+  }
+
+  public void cambiarEstado(EstadoSolicitud estado) {
+    this.estado = estado;
+  }
+
+  public void asignarSedes(Collection<Sede> elegidas) {
+    sedes.clear();
+    sedes.addAll(elegidas);
+  }
+
+  public List<String> nombresSedes() {
+    return sedes.stream().sorted(Comparator.comparing(Sede::getId)).map(Sede::getNombre).toList();
+  }
+
+  public int getVecesRechazada() {
+    return vecesRechazada;
+  }
+
+  public void registrarRechazo() {
+    this.vecesRechazada++;
+  }
+
+  public String getSeguimiento() {
+    return seguimiento;
+  }
+
+  public void definirSeguimiento(String seguimiento) {
+    this.seguimiento = seguimiento;
   }
 }

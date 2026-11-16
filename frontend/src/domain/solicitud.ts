@@ -7,7 +7,9 @@ import {
   nombreValido,
   PLANTILLAS,
   rutValido,
+  SEDES,
   telefonoValido,
+  type TipoTelefono,
 } from "./reglas";
 
 export const solicitudSchema = z
@@ -16,9 +18,11 @@ export const solicitudSchema = z
     rut: z.string(),
     correo: z.string(),
     telefono: z.string(),
+    tipoTelefono: z.enum(["celular", "fijo"]),
     periodoInicio: z.string(),
     periodoFin: z.string(),
     plantilla: z.string(),
+    sedes: z.array(z.string()),
     descripcion: z.string(),
   })
   .superRefine((valores, ctx) => {
@@ -37,7 +41,7 @@ export const solicitudSchema = z
     } else if (!correoValido(valores.correo)) {
       ctx.addIssue({ code: "custom", path: ["correo"], message: mensajes.correo });
     }
-    if (!telefonoValido(valores.telefono)) {
+    if (!telefonoValido(valores.telefono, valores.tipoTelefono)) {
       ctx.addIssue({ code: "custom", path: ["telefono"], message: mensajes.telefono });
     }
     const inicioValido = fechaValida(valores.periodoInicio);
@@ -50,6 +54,11 @@ export const solicitudSchema = z
     }
     if (inicioValido && finValido && compararFechas(valores.periodoInicio.trim(), valores.periodoFin.trim()) > 0) {
       ctx.addIssue({ code: "custom", path: ["periodoFin"], message: mensajes.periodo });
+    }
+    if (valores.sedes.length === 0) {
+      ctx.addIssue({ code: "custom", path: ["sedes"], message: mensajes.sedeRequerida });
+    } else if (valores.sedes.some((sede) => !SEDES.includes(sede as (typeof SEDES)[number]))) {
+      ctx.addIssue({ code: "custom", path: ["sedes"], message: mensajes.sede });
     }
     if (!valores.plantilla) {
       ctx.addIssue({ code: "custom", path: ["plantilla"], message: mensajes.plantillaRequerida });
@@ -68,8 +77,10 @@ export const formularioVacio: SolicitudFormulario = {
   rut: "",
   correo: "",
   telefono: "",
+  tipoTelefono: "celular" satisfies TipoTelefono,
   periodoInicio: "",
   periodoFin: "",
   plantilla: "",
+  sedes: [],
   descripcion: "",
 };

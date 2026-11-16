@@ -1,0 +1,28 @@
+package cl.copat.evalua.publico.api;
+
+public record ReclamoResponse(
+    long id,
+    String fecha,
+    String hora,
+    String nombre,
+    String telefono,
+    String empresa,
+    String correo,
+    String obra,
+    String fechaServicio,
+    String ubicacion,
+    String guiaDespacho,
+    String tipo,
+    String descripcion,
+    String preferenciaContacto,
+    String horario,
+    String comentarios,
+    String estado,
+    String area,
+    String responsable,
+    String fechaGestion,
+    String observaciones,
+    String horaCierre,
+    String fechaCierre,
+    String solucion,
+    String sede) {}

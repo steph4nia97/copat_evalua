@@ -1,5 +1,7 @@
 package cl.copat.evalua.departamento1.api;
 
+import java.util.List;
+
 public record SolicitudResponse(
     long id,
     String nombreEmpresa,
@@ -9,6 +11,13 @@ public record SolicitudResponse(
     String periodoInicio,
     String periodoFin,
     String plantilla,
+    List<String> sedes,
     String descripcion,
     String estado,
-    String creadoPor) {}
+    String creadoPor,
+    String motivoRechazo,
+    String rechazoPara,
+    boolean volvioDeRechazo,
+    String desempeno,
+    String promedio,
+    String seguimiento) {}

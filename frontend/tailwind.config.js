@@ -16,6 +16,8 @@ export default {
           DEFAULT: "#b8613a",
           dark: "#8c4526",
         },
+        "aviso-campo": "#0b4f6c",
+        "error-campo": "#7a1d1d",
         ink: "#1c1915",
         muted: "#6f675e",
       },

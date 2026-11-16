@@ -5,6 +5,8 @@ export type Usuario = {
   email: string;
   nombre: string;
   departamento: string;
+  departamentoId: number;
+  claveProvisoria: boolean;
 };
 
 type Sesion = {
@@ -12,6 +14,7 @@ type Sesion = {
   listo: boolean;
   ingresar: (correo: string, contrasena: string) => Promise<void>;
   salir: () => Promise<void>;
+  actualizar: (usuario: Usuario) => void;
 };
 
 const Contexto = createContext<Sesion | null>(null);
@@ -39,8 +42,14 @@ export function ProveedorSesion({ children }: { children: ReactNode }) {
         setUsuario(sesion);
       },
       async salir() {
-        await api<void>("/api/auth/logout", { method: "POST" });
-        setUsuario(null);
+        try {
+          await api<void>("/api/auth/logout", { method: "POST" });
+        } finally {
+          setUsuario(null);
+        }
+      },
+      actualizar(sesion) {
+        setUsuario(sesion);
       },
     }),
     [usuario, listo],

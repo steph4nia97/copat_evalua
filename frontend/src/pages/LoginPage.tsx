@@ -34,7 +34,7 @@ export function LoginPage() {
   return (
     <main className="mx-auto flex min-h-screen max-w-md items-center px-4">
       <form noValidate onSubmit={enviar} className="w-full rounded-xl border border-line bg-card p-6 shadow-card">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-copper">Departamento 1</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-copper">Ingreso</p>
         <h1 className="mt-2 font-serif text-4xl text-pine">Copat evalua</h1>
         <p className="mt-2 text-sm text-muted">Ingrese con su correo y contraseña.</p>
         <label htmlFor="correo" className="mt-6 block text-sm font-semibold">
