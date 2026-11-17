@@ -7,7 +7,6 @@ import java.util.List;
 public final class Catalogo {
 
   public static final short DEPARTAMENTO_1 = 1;
-  public static final short DEPARTAMENTO_2 = 2;
   public static final short DEPARTAMENTO_3 = 3;
   public static final short DEPARTAMENTO_ADMIN = 4;
   public static final String ESTADO_INICIAL = "solicitud ingresada";
@@ -20,6 +19,11 @@ public final class Catalogo {
   public static final String ACCION_RECHAZADA = "Solicitud rechazada";
   public static final String ACCION_REENVIADA = "Solicitud reenviada a revision";
   public static final String ACCION_USUARIO_CREADO = "Usuario creado";
+  public static final String ACCION_USUARIO_ACTUALIZADO = "Usuario actualizado";
+  public static final String ACCION_USUARIO_ELIMINADO = "Usuario eliminado";
+  public static final String ACCION_USUARIO_DESACTIVADO = "Usuario desactivado";
+  public static final String ACCION_USUARIO_REACTIVADO = "Usuario reactivado";
+  public static final String ACCION_CARGO = "Cargo actualizado";
   public static final String ACCION_NOMBRE = "Nombre actualizado";
   public static final String ACCION_CLAVE = "Contrasena actualizada";
   public static final String ACCION_CARGA_CLIENTES = "Datos de clientes cargados";
@@ -62,7 +66,7 @@ public final class Catalogo {
   private Catalogo() {}
 
   public static boolean operaSolicitudes(short id) {
-    return id == DEPARTAMENTO_1 || id == DEPARTAMENTO_2;
+    return id == DEPARTAMENTO_1;
   }
 
   public static boolean seguimientoValido(String estado) {
@@ -115,7 +119,6 @@ public final class Catalogo {
   public static String nombreDepartamento(short id) {
     return switch (id) {
       case DEPARTAMENTO_1 -> "Departamento 1";
-      case DEPARTAMENTO_2 -> "Departamento 2";
       case DEPARTAMENTO_3 -> "Departamento 3";
       case DEPARTAMENTO_ADMIN -> "Administración";
       default -> "Departamento";

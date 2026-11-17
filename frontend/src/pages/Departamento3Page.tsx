@@ -54,7 +54,6 @@ type Revision = {
   descripcion: string | null;
   tieneEvidencia: boolean;
   tienePdf: boolean;
-  reenviada: boolean;
   seguimiento: string | null;
   notasSeguimiento: NotaSeguimiento[];
 };
@@ -135,11 +134,6 @@ function Tarjeta({ item }: { item: Revision }) {
           >
             {item.seguimiento ?? "Recibida"}
           </p>
-          {item.reenviada && (
-            <p className="mt-1 inline-block rounded-full bg-copper px-2 py-0.5 text-xs font-semibold text-white">
-              Volvió tras un rechazo
-            </p>
-          )}
           <p className="text-sm text-muted">
             {item.rut} · {item.correo} · {item.telefono ?? "—"}
           </p>
@@ -249,7 +243,7 @@ function Tarjeta({ item }: { item: Revision }) {
         ))}
       </select>
       <p className="mt-1 text-xs text-muted">
-        Departamento 1 ve En procesamiento hasta que el estado quede Cerrada. Ahí lo ve Cerrado.
+        Departamento 1 ve Respondida cuando llega la encuesta. Si el seguimiento queda Cerrada, lo ve Cerrado.
       </p>
       <label htmlFor={`nota-${item.id}`} className="mt-3 block text-sm font-semibold">
         Nueva nota
@@ -308,6 +302,8 @@ export function Departamento3Page() {
     queryKey: ["d3-solicitudes"],
     queryFn: () => api<Revision[]>("/api/departamento3/solicitudes"),
     enabled: usuario?.departamentoId === 3,
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
   });
 
   const visibles = useMemo(() => {
@@ -346,7 +342,7 @@ export function Departamento3Page() {
             <h1 className="font-serif text-3xl">Seguimiento</h1>
             <p className="mt-1 max-w-3xl text-sm text-muted">
               Después de recibir la encuesta, el seguimiento avanza con notas hasta cerrarlo.
-              Departamento 1 solo ve En procesamiento o Cerrado.
+              Departamento 1 ve Enviada a cliente, luego Respondida, y Cerrado cuando se cierra.
             </p>
           </div>
           <Link to="/indicadores" className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white">

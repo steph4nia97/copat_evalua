@@ -4,6 +4,7 @@ import { api } from "../api/client";
 export type Usuario = {
   email: string;
   nombre: string;
+  cargo: string;
   departamento: string;
   departamentoId: number;
   claveProvisoria: boolean;

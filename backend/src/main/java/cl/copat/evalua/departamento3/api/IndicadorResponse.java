@@ -15,4 +15,6 @@ public record IndicadorResponse(
     BigDecimal promedio,
     List<NotaResponse> notas,
     String fecha,
+    String correo,
+    String telefono,
     int vecesRechazada) {}

@@ -1,6 +1,6 @@
 # Copat evalua
 
-Monolito modular. Cubre Departamento 1 (crear solicitudes), Departamento 2 (contacto y envío a revisión con PDF) y Departamento 3 (revisión de la guía).
+Monolito modular. Cubre Departamento 1 (solicitudes, clientes y envío de la encuesta) y Departamento 3 (seguimiento, métricas y reclamos).
 
 ## Requisitos
 
@@ -23,7 +23,6 @@ Base de datos local: `copat` / `copat` en `localhost:5432/copat_evalua`.
 ## Usuarios semilla
 
 - Departamento 1: `semilla1@copat.cl` / `semilla1`
-- Departamento 2: `semilla2@copat.cl` / `semilla2`
 - Departamento 3: `semilla3@copat.cl` / `semilla3`
 
 La contraseña se guarda con BCrypt. Un ingreso fallido responde siempre `Correo o contraseña incorrectos.`

@@ -6,7 +6,7 @@ public final class Mensajes {
   public static final String SESION = "Debe iniciar sesión.";
   public static final String NOMBRE_REQUERIDO = "Ingrese el nombre de la empresa.";
   public static final String NOMBRE =
-      "El nombre de la empresa solo admite letras y números, con un máximo de 100 caracteres.";
+      "El nombre de la empresa admite letras, números y signos de razón social, con un máximo de 100 caracteres.";
   public static final String RUT_REQUERIDO = "Ingrese el RUT.";
   public static final String RUT = "El RUT solo admite números y la letra K, con dígito verificador.";
   public static final String CORREO_REQUERIDO = "Ingrese el correo.";
@@ -33,6 +33,7 @@ public final class Mensajes {
       "El PDF no corresponde a la encuesta D-SIG-10-01. Descargue la guía base de esta solicitud.";
   public static final String PDF_INCOMPLETO = "El PDF no está completo según la guía.";
   public static final String ESTADO_CREADA = "Solo puede marcar como enviada a cliente una solicitud ingresada.";
+  public static final String EDICION_INGRESADA = "Solo se puede editar una solicitud ingresada.";
   public static final String ESTADO_ENVIADA =
       "Solo puede enviar a revisión una solicitud que ya fue enviada a cliente.";
   public static final String DESCRIPCION_REVISION = "Escriba una nota de seguimiento.";
@@ -46,10 +47,15 @@ public final class Mensajes {
   public static final String RECHAZO_ESTADO = "Solo puede rechazar una solicitud que está en revisión.";
   public static final String REENVIO_ESTADO = "Solo puede reenviar una solicitud rechazada.";
   public static final String NOMBRE_USUARIO = "Ingrese el nombre, con un máximo de 80 caracteres.";
+  public static final String CARGO = "Ingrese el cargo, con un máximo de 80 caracteres.";
   public static final String CLAVE_CORTA = "La contraseña debe tener entre 8 y 72 caracteres.";
   public static final String CLAVE_ACTUAL = "La contraseña actual no coincide.";
   public static final String CLAVE_DISTINTA = "La nueva contraseña debe ser distinta de la actual.";
   public static final String CORREO_REGISTRADO = "Este correo ya está registrado.";
+  public static final String DEPARTAMENTO_ADMIN = "La cuenta de administración conserva su departamento.";
+  public static final String USUARIO_PROPIO = "No puede eliminar su propia cuenta.";
+  public static final String CUENTA_DESACTIVADA = "Esta cuenta está desactivada.";
+  public static final String USUARIO_CON_MOVIMIENTOS = "Este usuario tiene movimientos registrados y no se puede eliminar.";
   public static final String DEPARTAMENTO_USUARIO = "Seleccione Departamento 1, 2 o 3.";
   public static final String ENLACE_AUSENTE = "Esta solicitud todavía no tiene enlace. Envíe la encuesta para crearlo.";
   public static final String ENLACE_ESTADO =
@@ -84,7 +90,7 @@ public final class Mensajes {
   public static final String RECLAMO_SEDE = "Seleccione la sede responsable del reclamo.";
   public static final String EXCEL = "Adjunte un archivo Excel (.xlsx).";
   public static final String EXCEL_CLIENTES = "La primera fila debe incluir RUT y Razón social o Nombre empresa. Las demás columnas, como Guía de despacho, se pueden dejar.";
-  public static final String EXCEL_CONTACTOS = "La primera fila debe incluir RUT, Razón social, Nombre contacto y Correo.";
+  public static final String EXCEL_CONTACTOS = "La primera fila debe incluir RUT, Razón social y Nombre contacto. Si falta el correo o el teléfono, se guarda como No aplica.";
 
   private Mensajes() {}
 }

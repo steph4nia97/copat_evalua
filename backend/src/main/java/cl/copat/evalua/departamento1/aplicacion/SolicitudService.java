@@ -7,6 +7,7 @@ import cl.copat.evalua.departamento1.dominio.Catalogo;
 import cl.copat.evalua.departamento1.dominio.Correo;
 import cl.copat.evalua.departamento1.dominio.Fechas;
 import cl.copat.evalua.departamento1.dominio.Mensajes;
+import cl.copat.evalua.departamento1.dominio.NoAplica;
 import cl.copat.evalua.departamento1.dominio.NombreEmpresa;
 import cl.copat.evalua.departamento1.dominio.Rut;
 import cl.copat.evalua.departamento1.dominio.TelefonoChile;
@@ -164,7 +165,7 @@ public class SolicitudService {
 
     String nombre = NombreEmpresa.normalizar(request.nombreEmpresa());
     String rut = Rut.normalizar(request.rut());
-    String correo = Correo.normalizar(request.correo());
+    String correo = correoDe(request.correo());
     String telefono = TelefonoChile.normalizar(request.telefono());
     LocalDate inicio = Fechas.parse(request.periodoInicio().trim());
     LocalDate fin = Fechas.parse(request.periodoFin().trim());
@@ -212,6 +213,56 @@ public class SolicitudService {
     return aRespuesta(solicitud);
   }
 
+  @Transactional
+  public SolicitudResponse editar(long id, CrearSolicitudRequest request, UsuarioPrincipal principal) {
+    exigirDepartamento(principal);
+    validar(request);
+    Solicitud solicitud = solicitudes.buscar(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO));
+    if (!Catalogo.operaSolicitudes(solicitud.getDepartamento().getId())) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO);
+    }
+    if (!Catalogo.ESTADO_INICIAL.equals(solicitud.getEstado().getNombre())) {
+      throw new ReglaNegocioException(Mensajes.EDICION_INGRESADA);
+    }
+
+    String nombre = NombreEmpresa.normalizar(request.nombreEmpresa());
+    String rut = Rut.normalizar(request.rut());
+    String correo = correoDe(request.correo());
+    String telefono = TelefonoChile.normalizar(request.telefono());
+    LocalDate inicio = Fechas.parse(request.periodoInicio().trim());
+    LocalDate fin = Fechas.parse(request.periodoFin().trim());
+    String descripcion = normalizarDescripcion(request.descripcion());
+    if (solicitudes.existsByRutAndPeriodoInicioAndPeriodoFinAndIdNot(rut, inicio, fin, id)) {
+      throw new PeriodoDuplicadoException();
+    }
+    Plantilla plantilla = plantillas.findByNombre(request.plantilla().trim())
+        .orElseThrow(() -> new ReglaNegocioException(Mensajes.PLANTILLA, Map.of("plantilla", Mensajes.PLANTILLA)));
+    List<String> nombresSede = normalizarSedes(request.sedes());
+    List<Sede> encontradas = sedes.findByNombreIn(nombresSede);
+    if (encontradas.size() != nombresSede.size()) {
+      throw new ReglaNegocioException(Mensajes.SEDE, Map.of("sedes", Mensajes.SEDE));
+    }
+    solicitud.editar(nombre, rut, correo, telefono, inicio, fin, plantilla, descripcion);
+    solicitud.asignarSedes(encontradas);
+    try {
+      solicitudes.saveAndFlush(solicitud);
+    } catch (DataIntegrityViolationException ex) {
+      if (esDuplicado(ex)) {
+        throw new PeriodoDuplicadoException();
+      }
+      throw ex;
+    }
+    return aRespuesta(solicitud);
+  }
+
+  private static String correoDe(String valor) {
+    if (NoAplica.es(valor)) {
+      return NoAplica.TEXTO;
+    }
+    return Correo.normalizar(valor);
+  }
+
   private void validar(CrearSolicitudRequest request) {
     Map<String, String> campos = new LinkedHashMap<>();
     if (request.nombreEmpresa() == null || request.nombreEmpresa().isBlank()) {
@@ -226,7 +277,7 @@ public class SolicitudService {
     }
     if (request.correo() == null || request.correo().isBlank()) {
       campos.put("correo", Mensajes.CORREO_REQUERIDO);
-    } else if (!Correo.esValido(Correo.normalizar(request.correo()))) {
+    } else if (!NoAplica.es(request.correo()) && !Correo.esValido(Correo.normalizar(request.correo()))) {
       campos.put("correo", Mensajes.CORREO);
     }
     if (!TelefonoChile.esValido(request.telefono())) {
@@ -335,7 +386,7 @@ public class SolicitudService {
   }
 
   private static String firmar(Usuario usuario) {
-    return usuario.getNombre() + " (" + usuario.getEmail() + ")";
+    return usuario.nombreVisible() + " (" + usuario.getEmail() + ")";
   }
 
   private static boolean esDuplicado(DataIntegrityViolationException ex) {

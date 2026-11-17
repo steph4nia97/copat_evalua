@@ -4,6 +4,8 @@ public record UsuarioCreadoResponse(
     long id,
     String email,
     String nombre,
+    String cargo,
     String departamento,
     short departamentoId,
-    boolean claveProvisoria) {}
+    boolean claveProvisoria,
+    boolean activo) {}

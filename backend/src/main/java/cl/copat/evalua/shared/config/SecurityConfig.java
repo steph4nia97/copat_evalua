@@ -1,6 +1,7 @@
 package cl.copat.evalua.shared.config;
 
 import cl.copat.evalua.departamento1.dominio.Mensajes;
+import cl.copat.evalua.departamento1.seguridad.CuentaActivaFilter;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -16,6 +17,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.security.web.csrf.CsrfToken;
@@ -35,7 +37,7 @@ public class SecurityConfig {
   }
 
   @Bean
-  SecurityFilterChain filtro(HttpSecurity http, ObjectMapper objectMapper) throws Exception {
+  SecurityFilterChain filtro(HttpSecurity http, ObjectMapper objectMapper, CuentaActivaFilter cuentaActiva) throws Exception {
     CookieCsrfTokenRepository csrf = CookieCsrfTokenRepository.withHttpOnlyFalse();
     csrf.setCookiePath("/");
 
@@ -44,6 +46,7 @@ public class SecurityConfig {
             .csrfTokenRepository(csrf)
             .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
         .addFilterAfter(new CsrfCookieFilter(), CsrfFilter.class)
+        .addFilterAfter(cuentaActiva, SecurityContextHolderFilter.class)
         .sessionManagement(session -> session
             .sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             .sessionFixation().changeSessionId())

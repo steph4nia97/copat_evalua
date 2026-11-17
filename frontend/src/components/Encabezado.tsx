@@ -29,13 +29,16 @@ export function Encabezado() {
         </button>
         <div className="mr-auto">
           <p className="font-serif text-2xl leading-none">Copat evalua</p>
-          <p className="mt-1 text-sm text-pine-soft">{usuario.departamento}</p>
+          <p className="mt-1 text-sm text-pine-soft">
+            {usuario.departamento}
+            {usuario.cargo ? ` · ${usuario.cargo}` : ""}
+          </p>
         </div>
         <nav className="flex flex-wrap items-center gap-2" aria-label="Menú">
           <button type="button" className={boton} onClick={() => navigate("/")}>
             Inicio
           </button>
-          {(usuario.departamentoId === 1 || usuario.departamentoId === 2) && (
+          {usuario.departamentoId === 1 && (
             <button type="button" className={boton} onClick={() => navigate("/bitacora")}>
               Bitácora
             </button>

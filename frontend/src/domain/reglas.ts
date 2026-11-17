@@ -1,6 +1,6 @@
 export const mensajes = {
   nombreRequerido: "Ingrese el nombre de la empresa.",
-  nombre: "El nombre de la empresa solo admite letras y números, con un máximo de 100 caracteres.",
+  nombre: "El nombre de la empresa admite letras, números y signos de razón social, con un máximo de 100 caracteres.",
   rutRequerido: "Ingrese el RUT.",
   rut: "El RUT solo admite números y la letra K, con dígito verificador.",
   correoRequerido: "Ingrese el correo.",
@@ -19,8 +19,14 @@ export const mensajes = {
   revise: "Revise los datos ingresados.",
 };
 
-const NOMBRE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+(?: [A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+)*$/;
+const NOMBRE = /^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9.,&'()/-]+(?: [A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9.,&'()/-]+)*$/;
 const CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export const NO_APLICA = "No aplica";
+
+export function esNoAplica(valor: string | null | undefined): boolean {
+  return (valor ?? "").trim().toLowerCase() === "no aplica";
+}
 
 export const PLANTILLAS = ["Guia evaluacion", "Guia evaluacion 2"] as const;
 
@@ -75,13 +81,16 @@ export function enmascararTelefono(valor: string, tipo: TipoTelefono): string {
 
 export function telefonoValido(valor: string, tipo: TipoTelefono): boolean {
   const texto = valor.trim();
-  if (texto.length === 0) {
+  if (texto.length === 0 || esNoAplica(texto)) {
     return true;
   }
   return tipo === "celular" ? /^\d{8}$/.test(texto) : /^[2-8]\d{8}$/.test(texto);
 }
 
 export function componerTelefono(valor: string, tipo: TipoTelefono): string {
+  if (esNoAplica(valor)) {
+    return NO_APLICA;
+  }
   const texto = enmascararTelefono(valor, tipo);
   if (!telefonoValido(texto, tipo) || texto.length === 0) {
     return "";
@@ -91,6 +100,9 @@ export function componerTelefono(valor: string, tipo: TipoTelefono): string {
 
 export function correoValido(valor: string): boolean {
   const texto = valor.trim();
+  if (esNoAplica(texto)) {
+    return true;
+  }
   return texto.length > 0 && texto.length <= 254 && CORREO.test(texto);
 }
 

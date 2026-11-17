@@ -5,7 +5,7 @@ import { AjustesPage } from "./pages/AjustesPage";
 import { BitacoraPage } from "./pages/BitacoraPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ClientesPage } from "./pages/ClientesPage";
-import { Departamento2Page } from "./pages/Departamento2Page";
+import { IngresoPage } from "./pages/IngresoPage";
 import { Departamento3Page } from "./pages/Departamento3Page";
 import { EncuestaPublicaPage } from "./pages/EncuestaPublicaPage";
 import { IndicadoresPage } from "./pages/IndicadoresPage";
@@ -22,11 +22,11 @@ export function App() {
       <Route path="/encuesta/:token" element={<EncuestaPublicaPage />} />
       <Route path="/reclamo" element={<ReclamoPublicoPage />} />
       <Route path="/reclamos" element={<Protegida departamento={3}><ReclamosPage /></Protegida>} />
-      <Route path="/clientes" element={<Protegida departamento={[1, 2]}><ClientesPage /></Protegida>} />
+      <Route path="/clientes" element={<Protegida departamento={1}><ClientesPage /></Protegida>} />
       <Route path="/" element={<Inicio />} />
       <Route path="/ajustes" element={<Protegida><AjustesPage /></Protegida>} />
       <Route path="/indicadores" element={<Protegida departamento={3}><IndicadoresPage /></Protegida>} />
-      <Route path="/bitacora" element={<Protegida departamento={[1, 2, 3]}><BitacoraPage /></Protegida>} />
+      <Route path="/bitacora" element={<Protegida departamento={[1, 3]}><BitacoraPage /></Protegida>} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
@@ -55,8 +55,8 @@ function Inicio() {
   if (!usuario) {
     return <Navigate to="/login" replace />;
   }
-  if (usuario.departamentoId === 1 || usuario.departamentoId === 2) {
-    return <Departamento2Page />;
+  if (usuario.departamentoId === 1) {
+    return <IngresoPage />;
   }
   if (usuario.departamentoId === 3) {
     return <Departamento3Page />;

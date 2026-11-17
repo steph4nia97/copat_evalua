@@ -13,12 +13,15 @@ public final class TelefonoChile {
   }
 
   public static boolean esValido(String valor) {
-    return esVacio(valor) || PATRON.matcher(valor.trim()).matches();
+    return esVacio(valor) || NoAplica.es(valor) || PATRON.matcher(valor.trim()).matches();
   }
 
   public static String normalizar(String valor) {
     if (esVacio(valor)) {
       return null;
+    }
+    if (NoAplica.es(valor)) {
+      return NoAplica.TEXTO;
     }
     return valor.trim();
   }

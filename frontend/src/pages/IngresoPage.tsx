@@ -1,10 +1,12 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { api, ErrorApi } from "../api/client";
 import { useSesion } from "../auth/sesion";
 import { Encabezado } from "../components/Encabezado";
 import { FormularioSolicitud } from "../components/FormularioSolicitud";
+import { esNoAplica, NO_APLICA } from "../domain/reglas";
+import { formularioVacio, type SolicitudFormulario } from "../domain/solicitud";
 import { CargaDatos } from "./ClientesPage";
 
 type Solicitud = {
@@ -22,35 +24,84 @@ type Solicitud = {
   creadoPor: string;
   motivoRechazo: string | null;
   rechazoPara: string | null;
-  volvioDeRechazo: boolean;
   desempeno: string | null;
   promedio: string | null;
   seguimiento: string | null;
 };
 
 const colores: Record<string, string> = {
-  "solicitud ingresada": "bg-emerald-100 text-emerald-900",
-  "solicitud enviada a cliente": "bg-sky-100 text-sky-900",
-  "solicitud en revision": "bg-amber-100 text-amber-900",
-  "solicitud aprobada": "bg-teal-100 text-teal-900",
-  "solicitud rechazada": "bg-rose-100 text-rose-900",
-  "En procesamiento": "bg-amber-100 text-amber-900",
-  "Cerrado": "bg-teal-100 text-teal-900",
+  Ingresada: "bg-emerald-100 text-emerald-900",
+  "Enviada a cliente": "bg-sky-100 text-sky-900",
+  Respondida: "bg-amber-100 text-amber-900",
+  Cerrado: "bg-teal-100 text-teal-900",
+  Rechazada: "bg-rose-100 text-rose-900",
 };
 
 function estadoVisible(solicitud: Solicitud) {
-  return solicitud.seguimiento ?? solicitud.estado;
+  if (solicitud.seguimiento === "Cerrado") {
+    return "Cerrado";
+  }
+  switch (solicitud.estado) {
+    case "solicitud ingresada":
+      return "Ingresada";
+    case "solicitud enviada a cliente":
+      return "Enviada a cliente";
+    case "solicitud en revision":
+      return "Respondida";
+    case "solicitud rechazada":
+      return "Rechazada";
+    default:
+      return solicitud.estado;
+  }
 }
 
-function textoContacto(solicitud: Solicitud) {
-  return [
-    `Empresa: ${solicitud.nombreEmpresa}`,
-    `RUT: ${solicitud.rut}`,
-    `Correo: ${solicitud.correo}`,
-    `Teléfono: ${solicitud.telefono ?? "—"}`,
-    `Sede: ${solicitud.sedes.length ? solicitud.sedes.join(", ") : "Sin sede"}`,
-    `Período: ${solicitud.periodoInicio} – ${solicitud.periodoFin}`,
-  ].join("\n");
+function valoresSolicitud(solicitud: Solicitud): SolicitudFormulario {
+  const telefono = solicitud.telefono ?? "";
+  const fijo = /^[2-8]\d{8}$/.test(telefono);
+  const celular = /^9\d{8}$/.test(telefono);
+  const sinTelefono = esNoAplica(telefono);
+  return {
+    ...formularioVacio,
+    nombreEmpresa: solicitud.nombreEmpresa,
+    rut: solicitud.rut,
+    correo: esNoAplica(solicitud.correo) ? NO_APLICA : solicitud.correo,
+    telefono: sinTelefono ? NO_APLICA : celular ? telefono.slice(1) : fijo ? telefono : "",
+    tipoTelefono: fijo ? "fijo" : "celular",
+    periodoInicio: solicitud.periodoInicio,
+    periodoFin: solicitud.periodoFin,
+    plantilla: solicitud.plantilla,
+    sedes: solicitud.sedes,
+    descripcion: solicitud.descripcion ?? "",
+  };
+}
+
+const ENLACE_PENDIENTE = "El enlace personal se incluirá al confirmar el envío.";
+
+type DestinatarioEnvio = {
+  nombre: string;
+  correo: string;
+  telefono: string | null;
+  mensaje: string;
+};
+
+type VistaEnvio = {
+  desde: string;
+  asunto: string;
+  destinatarios: DestinatarioEnvio[];
+};
+
+function telefonoWhatsapp(telefono: string | null) {
+  if (!telefono) {
+    return null;
+  }
+  const digitos = telefono.replace(/\D/g, "");
+  if (digitos.startsWith("56") && digitos.length >= 11) {
+    return digitos;
+  }
+  if (/^[2-9]\d{8}$/.test(digitos)) {
+    return `56${digitos}`;
+  }
+  return null;
 }
 
 function detalleError(err: unknown) {
@@ -60,7 +111,7 @@ function detalleError(err: unknown) {
   return { mensaje: "No se pudo completar la acción.", campos: [] as string[] };
 }
 
-export function Departamento2Page() {
+export function IngresoPage() {
   const { usuario, listo } = useSesion();
   const queryClient = useQueryClient();
   const [estado, setEstado] = useState("");
@@ -73,19 +124,19 @@ export function Departamento2Page() {
   const [errores, setErrores] = useState<Record<number, { mensaje: string; campos: string[] }>>({});
   const [vista, setVista] = useState<"ingreso" | "carga">("ingreso");
   const [formulario, setFormulario] = useState(false);
+  const [edicion, setEdicion] = useState<Solicitud | null>(null);
   const [aviso, setAviso] = useState("");
-  const opera = usuario?.departamentoId === 1 || usuario?.departamentoId === 2;
+  const [preparacion, setPreparacion] = useState<number | null>(null);
+  const [vistaEnvio, setVistaEnvio] = useState<VistaEnvio | null>(null);
+  const opera = usuario?.departamentoId === 1;
 
-  const estados = useQuery({
-    queryKey: ["d2-estados"],
-    queryFn: () => api<string[]>("/api/departamento2/estados"),
-    enabled: opera,
-  });
   const solicitudes = useQuery({
     queryKey: ["d2-solicitudes", estado],
     queryFn: () =>
-      api<Solicitud[]>(`/api/departamento2/solicitudes${estado ? `?estado=${encodeURIComponent(estado)}` : ""}`),
+      api<Solicitud[]>(`/api/departamento1/solicitudes${estado ? `?estado=${encodeURIComponent(estado)}` : ""}`),
     enabled: opera && vista === "ingreso",
+    refetchInterval: vista === "ingreso" ? 15000 : false,
+    refetchIntervalInBackground: true,
   });
   const plantillas = useQuery({
     queryKey: ["plantillas"],
@@ -106,7 +157,7 @@ export function Departamento2Page() {
       return siguiente;
     });
     try {
-      await api(`/api/departamento2/solicitudes/${id}/reenviar`, { method: "POST" });
+      await api(`/api/departamento1/solicitudes/${id}/reenviar`, { method: "POST" });
       await queryClient.invalidateQueries({ queryKey: ["d2-solicitudes"] });
     } catch (err) {
       setErrores((actual) => ({ ...actual, [id]: detalleError(err) }));
@@ -130,19 +181,6 @@ export function Departamento2Page() {
     });
   }
 
-  async function copiar(solicitud: Solicitud) {
-    try {
-      await navigator.clipboard.writeText(textoContacto(solicitud));
-      setCopiado(solicitud.id);
-      window.setTimeout(() => setCopiado((actual) => (actual === solicitud.id ? null : actual)), 2000);
-    } catch {
-      setErrores((actual) => ({
-        ...actual,
-        [solicitud.id]: { mensaje: "No se pudo copiar. Use los datos visibles de la fila.", campos: [] },
-      }));
-    }
-  }
-
   async function verEnlace(id: number) {
     if (visible === id) {
       setVisible(null);
@@ -155,7 +193,7 @@ export function Departamento2Page() {
     setOcupado(id);
     limpiarError(id);
     try {
-      const respuesta = await api<{ token: string | null; aviso: string }>(`/api/departamento2/solicitudes/${id}/enlace`);
+      const respuesta = await api<{ token: string | null; aviso: string }>(`/api/departamento1/solicitudes/${id}/enlace`);
       setConsultados((actual) => ({
         ...actual,
         [id]: respuesta.token ? `${window.location.origin}/encuesta/${respuesta.token}` : null,
@@ -171,12 +209,26 @@ export function Departamento2Page() {
     }
   }
 
+  async function prepararEnvio(id: number) {
+    setOcupado(id);
+    limpiarError(id);
+    try {
+      const vista = await api<VistaEnvio>(`/api/departamento1/solicitudes/${id}/vista-envio`);
+      setPreparacion(id);
+      setVistaEnvio(vista);
+    } catch (err) {
+      setErrores((actual) => ({ ...actual, [id]: detalleError(err) }));
+    } finally {
+      setOcupado(null);
+    }
+  }
+
   async function crearEnlace(id: number) {
     setOcupado(id);
     limpiarError(id);
     try {
       const respuesta = await api<{ token: string; correoEnviado: boolean; destino: string; aviso: string }>(
-        `/api/departamento2/solicitudes/${id}/enlace`,
+        `/api/departamento1/solicitudes/${id}/enlace`,
         { method: "POST" },
       );
       const url = `${window.location.origin}/encuesta/${respuesta.token}`;
@@ -189,6 +241,8 @@ export function Departamento2Page() {
         setCopiado(null);
       }
       await queryClient.invalidateQueries({ queryKey: ["d2-solicitudes"] });
+      setPreparacion(null);
+      setVistaEnvio(null);
     } catch (err) {
       setErrores((actual) => ({ ...actual, [id]: detalleError(err) }));
     } finally {
@@ -196,9 +250,52 @@ export function Departamento2Page() {
     }
   }
 
-  async function creada() {
+  async function enviarWhatsapp(id: number, destinatario: DestinatarioEnvio) {
+    const fono = telefonoWhatsapp(destinatario.telefono);
+    if (!fono) {
+      setErrores((actual) => ({
+        ...actual,
+        [id]: { mensaje: "Este contacto no tiene un teléfono válido para WhatsApp.", campos: [] },
+      }));
+      return;
+    }
+    const ventana = window.open("", "_blank");
+    setOcupado(id);
+    limpiarError(id);
+    try {
+      const respuesta = await api<{ token: string }>(`/api/departamento1/solicitudes/${id}/enlace?correo=false`, {
+        method: "POST",
+      });
+      const url = `${window.location.origin}/encuesta/${respuesta.token}`;
+      const texto = destinatario.mensaje.split(ENLACE_PENDIENTE).join(url);
+      const destino = `https://wa.me/${fono}?text=${encodeURIComponent(texto)}`;
+      if (ventana) {
+        ventana.location.href = destino;
+      } else {
+        window.location.href = destino;
+      }
+      setEnlaces((actual) => ({ ...actual, [id]: url }));
+      setAvisos((actual) => ({ ...actual, [id]: `Se abrió WhatsApp para ${destinatario.nombre}.` }));
+      setPreparacion(null);
+      setVistaEnvio(null);
+      await queryClient.invalidateQueries({ queryKey: ["d2-solicitudes"] });
+    } catch (err) {
+      ventana?.close();
+      setErrores((actual) => ({ ...actual, [id]: detalleError(err) }));
+    } finally {
+      setOcupado(null);
+    }
+  }
+
+  async function guardada() {
+    const eraEdicion = edicion != null;
     setFormulario(false);
-    setAviso("La solicitud quedó registrada con estado solicitud ingresada.");
+    setEdicion(null);
+    setAviso(
+      eraEdicion
+        ? "La solicitud ingresada quedó actualizada."
+        : "La solicitud quedó registrada con estado solicitud ingresada.",
+    );
     await queryClient.invalidateQueries({ queryKey: ["d2-solicitudes"] });
   }
 
@@ -227,13 +324,14 @@ export function Departamento2Page() {
           <>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-3xl text-sm text-muted">
-            El correo de la encuesta sale al contacto cuyo RUT coincide con el de la solicitud.
+            La empresa, el RUT, el correo y el teléfono se leen del cruce de los Excel. El período, la sede y la plantilla se eligen al ingresar.
           </p>
           <button
             type="button"
             className="rounded-md bg-copper px-4 py-2 font-semibold text-white hover:bg-copper-dark"
             onClick={() => {
               setAviso("");
+              setEdicion(null);
               setFormulario(true);
             }}
           >
@@ -258,11 +356,8 @@ export function Departamento2Page() {
             className="rounded-md border border-line bg-card px-3 py-2"
           >
             <option value="">Todas</option>
-            {(estados.data ?? []).map((opcion) => (
-              <option key={opcion} value={opcion}>
-                {opcion}
-              </option>
-            ))}
+            <option value="solicitud enviada a cliente">Enviada a cliente</option>
+            <option value="solicitud en revision">Respondida</option>
           </select>
         </div>
 
@@ -280,8 +375,10 @@ export function Departamento2Page() {
             <tbody>
               {(solicitudes.data ?? []).map((solicitud) => {
                 const error = errores[solicitud.id];
+                const previa = preparacion === solicitud.id ? vistaEnvio : null;
                 return (
-                  <tr key={solicitud.id} className="border-t border-line align-top">
+                  <Fragment key={solicitud.id}>
+                  <tr className="border-t border-line align-top">
                     <td className="px-3 py-3">
                       <p className="font-semibold">{solicitud.nombreEmpresa}</p>
                       <p className="mt-1 text-muted">{solicitud.rut}</p>
@@ -290,9 +387,6 @@ export function Departamento2Page() {
                         <p className="mt-2 max-w-xs rounded-md bg-rose-50 px-2 py-1 text-rose-950">
                           Motivo del rechazo: {solicitud.motivoRechazo}
                         </p>
-                      )}
-                      {solicitud.volvioDeRechazo && (
-                        <p className="mt-2 text-xs font-semibold text-copper-dark">Volvió a revisión tras un rechazo</p>
                       )}
                     </td>
                     <td className="px-3 py-3">
@@ -314,13 +408,19 @@ export function Departamento2Page() {
                     </td>
                     <td className="px-3 py-3">
                       <div className="flex min-w-56 flex-col items-start gap-2">
-                        <button
-                          type="button"
-                          className="rounded-md border border-line px-3 py-1"
-                          onClick={() => void copiar(solicitud)}
-                        >
-                          {copiado === solicitud.id && !enlaces[solicitud.id] ? "Copiado" : "Copiar contacto"}
-                        </button>
+                        {solicitud.estado === "solicitud ingresada" && (
+                          <button
+                            type="button"
+                            className="rounded-md border border-line px-3 py-1"
+                            onClick={() => {
+                              setAviso("");
+                              setEdicion(solicitud);
+                              setFormulario(true);
+                            }}
+                          >
+                            Editar
+                          </button>
+                        )}
                         <button
                           type="button"
                           disabled={ocupado === solicitud.id}
@@ -330,16 +430,14 @@ export function Departamento2Page() {
                         >
                           {visible === solicitud.id ? "Ocultar enlace" : "Ver enlace"}
                         </button>
-                        {(solicitud.estado === "solicitud ingresada" ||
-                          solicitud.estado === "solicitud enviada a cliente" ||
-                          solicitud.estado === "solicitud rechazada") && (
+                        {solicitud.estado === "solicitud ingresada" && (
                           <button
                             type="button"
                             disabled={ocupado === solicitud.id}
                             className="rounded-md bg-pine px-3 py-1 font-semibold text-white disabled:opacity-60"
-                            onClick={() => void crearEnlace(solicitud.id)}
+                            onClick={() => void prepararEnvio(solicitud.id)}
                           >
-                            {solicitud.estado === "solicitud ingresada" ? "Enviar encuesta por correo" : "Reenviar correo de la encuesta"}
+                            Enviar encuesta
                           </button>
                         )}
                         {(enlaces[solicitud.id] || (visible === solicitud.id && consultados[solicitud.id])) && (
@@ -382,6 +480,63 @@ export function Departamento2Page() {
                       </div>
                     </td>
                   </tr>
+                  {previa && (
+                    <tr className="border-t border-line">
+                      <td colSpan={8} className="bg-paper px-3 py-3">
+                        <div className="max-w-2xl rounded-md border border-line bg-card p-3">
+                          <p className="text-sm font-semibold">Así se enviará la encuesta</p>
+                          <p className="mt-2 text-sm">Desde {previa.desde}</p>
+                          {previa.destinatarios.map((destino) => (
+                            <p key={destino.correo} className="mt-2 text-sm">
+                              Correo {destino.correo}
+                              {destino.telefono ? ` · Teléfono ${destino.telefono}` : " · Sin teléfono"}
+                            </p>
+                          ))}
+                          <p className="mt-3 text-sm">Asunto: {previa.asunto}</p>
+                          {previa.destinatarios[0] && (
+                            <pre className="mt-2 whitespace-pre-wrap rounded-md border border-line bg-paper p-2 font-sans text-sm">
+                              {previa.destinatarios[0].mensaje}
+                            </pre>
+                          )}
+                          <p className="mt-2 text-xs text-muted">
+                            WhatsApp abre el chat con este texto. Para que la aplicación lo envíe sola hay que conectar WhatsApp Business.
+                          </p>
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={ocupado === solicitud.id || previa.destinatarios.length === 0}
+                              className="rounded-md bg-pine px-3 py-1 text-sm font-semibold text-white disabled:opacity-60"
+                              onClick={() => void crearEnlace(solicitud.id)}
+                            >
+                              Enviar correo
+                            </button>
+                            {previa.destinatarios.map((destino) => (
+                              <button
+                                key={`wsp-${destino.correo}`}
+                                type="button"
+                                disabled={ocupado === solicitud.id || telefonoWhatsapp(destino.telefono) == null}
+                                className="rounded-md border border-line px-3 py-1 text-sm font-semibold disabled:opacity-60"
+                                onClick={() => void enviarWhatsapp(solicitud.id, destino)}
+                              >
+                                Enviar por WhatsApp
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              className="rounded-md border border-line px-3 py-1 text-sm"
+                              onClick={() => {
+                                setPreparacion(null);
+                                setVistaEnvio(null);
+                              }}
+                            >
+                              Cerrar
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </Fragment>
                 );
               })}
               {solicitudes.data?.length === 0 && (
@@ -399,10 +554,16 @@ export function Departamento2Page() {
       </main>
       {formulario && (
         <FormularioSolicitud
+          key={edicion?.id ?? "nueva"}
           plantillas={plantillas.data ?? []}
           sedes={sedes.data ?? []}
-          onCerrar={() => setFormulario(false)}
-          onCreada={() => void creada()}
+          solicitudId={edicion?.id}
+          valores={edicion ? valoresSolicitud(edicion) : undefined}
+          onCerrar={() => {
+            setFormulario(false);
+            setEdicion(null);
+          }}
+          onGuardada={() => void guardada()}
         />
       )}
     </div>

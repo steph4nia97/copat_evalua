@@ -3,6 +3,7 @@ package cl.copat.evalua.departamento1;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import cl.copat.evalua.departamento1.dominio.Fechas;
+import cl.copat.evalua.departamento1.dominio.NoAplica;
 import cl.copat.evalua.departamento1.dominio.NombreEmpresa;
 import cl.copat.evalua.departamento1.dominio.Rut;
 import cl.copat.evalua.departamento1.dominio.TelefonoChile;
@@ -29,7 +30,9 @@ class ReglasDepartamento1Test {
     assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar("Empresa 1"))).isTrue();
     assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar("  Ñuñoa   12  "))).isTrue();
     assertThat(NombreEmpresa.normalizar("  Ñuñoa   12  ")).isEqualTo("Ñuñoa 12");
-    assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar("Empresa-1"))).isFalse();
+    assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar("Empresa-1"))).isTrue();
+    assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar("Copat S.A."))).isTrue();
+    assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar("Empresa@1"))).isFalse();
     assertThat(NombreEmpresa.esValido(NombreEmpresa.normalizar(""))).isFalse();
     assertThat(NombreEmpresa.esValido("A".repeat(101))).isFalse();
     assertThat(NombreEmpresa.esValido("A".repeat(100))).isTrue();
@@ -47,6 +50,20 @@ class ReglasDepartamento1Test {
     assertThat(TelefonoChile.esValido("123456789")).isFalse();
     assertThat(TelefonoChile.esValido("91234567")).isFalse();
     assertThat(TelefonoChile.normalizar(" ")).isNull();
+    assertThat(TelefonoChile.esValido("No aplica")).isTrue();
+    assertThat(TelefonoChile.normalizar(" no aplica ")).isEqualTo("No aplica");
+  }
+
+  @Test
+  void rellenaCorreoYTelefonoAusentes() {
+    assertThat(NoAplica.correo(null)).isEqualTo("No aplica");
+    assertThat(NoAplica.correo("  ")).isEqualTo("No aplica");
+    assertThat(NoAplica.correo("no aplica")).isEqualTo("No aplica");
+    assertThat(NoAplica.correo("ana@copat.cl")).isEqualTo("ana@copat.cl");
+    assertThat(NoAplica.correoAceptado("")).isTrue();
+    assertThat(NoAplica.correoAceptado("sin-arroba")).isFalse();
+    assertThat(NoAplica.telefono(null)).isEqualTo("No aplica");
+    assertThat(NoAplica.telefono("912345678")).isEqualTo("912345678");
   }
 
   @Test

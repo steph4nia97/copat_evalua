@@ -239,7 +239,7 @@ public class Departamento2Service {
         solicitud.nombresSedes(),
         solicitud.getDescripcion(),
         solicitud.getEstado().getNombre(),
-        solicitud.getCreadoPor().getNombre() + " (" + solicitud.getCreadoPor().getEmail() + ")",
+        solicitud.getCreadoPor().nombreVisible() + " (" + solicitud.getCreadoPor().getEmail() + ")",
         rechazada && rechazo != null ? rechazo.getDescripcion() : null,
         rechazada && rechazo != null ? rechazo.getDestinatario().getEmail() : null,
         solicitud.getVecesRechazada() > 0 && Catalogo.ESTADO_EN_REVISION.equals(solicitud.getEstado().getNombre()),

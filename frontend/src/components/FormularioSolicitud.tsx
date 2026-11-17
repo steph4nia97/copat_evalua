@@ -1,21 +1,62 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useMutation } from "@tanstack/react-query";
-import { useState, type ComponentProps } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ErrorApi } from "../api/client";
-import { componerTelefono, enmascararRut, enmascararTelefono, normalizarNombre, type TipoTelefono } from "../domain/reglas";
+import { componerTelefono, esNoAplica, NO_APLICA, normalizarNombre, type TipoTelefono } from "../domain/reglas";
 import { formularioVacio, solicitudSchema, type SolicitudFormulario } from "../domain/solicitud";
 import { CampoFecha } from "./CampoFecha";
+
+type Cruce = {
+  rut: string;
+  empresa: string;
+  nombreContacto: string | null;
+  correo: string | null;
+  telefono: string | null;
+};
+
+function claveCliente(fila: { rut: string; correo: string | null; nombreContacto: string | null }) {
+  return `${fila.rut}|${fila.correo ?? ""}|${fila.nombreContacto ?? ""}`;
+}
+
+function telefonoDesdeExcel(valor: string | null): { tipo: TipoTelefono; local: string } {
+  const digitos = (valor ?? "").replace(/\D/g, "");
+  if (digitos.startsWith("569") && digitos.length >= 11) {
+    return { tipo: "celular", local: digitos.slice(3, 11) };
+  }
+  if (digitos.length === 9 && digitos.startsWith("9")) {
+    return { tipo: "celular", local: digitos.slice(1) };
+  }
+  if (digitos.length === 8) {
+    return { tipo: "celular", local: digitos };
+  }
+  if (digitos.startsWith("56") && /^[2-8]\d{8}$/.test(digitos.slice(2, 11))) {
+    return { tipo: "fijo", local: digitos.slice(2, 11) };
+  }
+  if (/^[2-8]\d{8}$/.test(digitos)) {
+    return { tipo: "fijo", local: digitos };
+  }
+  return { tipo: "celular", local: "" };
+}
 
 type Props = {
   plantillas: string[];
   sedes: string[];
+  solicitudId?: number;
+  valores?: SolicitudFormulario;
   onCerrar: () => void;
-  onCreada: () => void;
+  onGuardada: () => void;
 };
 
-export function FormularioSolicitud({ plantillas, sedes, onCerrar, onCreada }: Props) {
+export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, onCerrar, onGuardada }: Props) {
   const [mensaje, setMensaje] = useState("");
+  const [cliente, setCliente] = useState(valores ? "actual" : "");
+  const [telefonoExcel, setTelefonoExcel] = useState("");
+  const cruce = useQuery({
+    queryKey: ["cruce-clientes"],
+    queryFn: () => api<Cruce[]>("/api/departamento1/cruce"),
+  });
+  const opciones = (cruce.data ?? []).filter((fila) => fila.nombreContacto && fila.correo);
   const {
     register,
     handleSubmit,
@@ -25,34 +66,57 @@ export function FormularioSolicitud({ plantillas, sedes, onCerrar, onCreada }: P
     formState: { errors },
   } = useForm<SolicitudFormulario>({
     resolver: zodResolver(solicitudSchema),
-    defaultValues: formularioVacio,
+    defaultValues: valores ?? formularioVacio,
   });
-  const rut = register("rut");
-  const telefono = register("telefono");
-  const tipoTelefono = register("tipoTelefono");
-  const tipo = watch("tipoTelefono");
   const sedesElegidas = watch("sedes");
+  const empresa = watch("nombreEmpresa");
+  const rut = watch("rut");
+  const correo = watch("correo");
+  const telefono = watch("telefono");
+  const tipo = watch("tipoTelefono");
+
+  function aplicarCliente(fila: Cruce) {
+    const correo = (fila.correo ?? "").trim();
+    const sinTelefono = !(fila.telefono ?? "").trim() || esNoAplica(fila.telefono);
+    const tel = telefonoDesdeExcel(sinTelefono ? null : fila.telefono);
+    setTelefonoExcel(sinTelefono || tel.local ? "" : (fila.telefono ?? "").trim());
+    setValue("nombreEmpresa", normalizarNombre(fila.empresa), { shouldValidate: true });
+    setValue("rut", fila.rut, { shouldValidate: true });
+    setValue("correo", esNoAplica(correo) || correo === "" ? NO_APLICA : correo, { shouldValidate: true });
+    setValue("tipoTelefono", tel.tipo, { shouldValidate: true });
+    setValue("telefono", sinTelefono ? NO_APLICA : tel.local, { shouldValidate: true });
+  }
+
+  useEffect(() => {
+    if (!valores) {
+      return;
+    }
+    const encontrada = opciones.find((fila) => fila.rut === valores.rut && fila.correo === valores.correo);
+    if (encontrada) {
+      setCliente(claveCliente(encontrada));
+    }
+  }, [opciones, valores]);
   const descripcion = watch("descripcion");
   const inicio = watch("periodoInicio");
   const fin = watch("periodoFin");
 
   const crear = useMutation({
-    mutationFn: (valores: SolicitudFormulario) =>
-      api("/api/departamento1/solicitudes", {
-        method: "POST",
+    mutationFn: (datos: SolicitudFormulario) =>
+      api(solicitudId == null ? "/api/departamento1/solicitudes" : `/api/departamento1/solicitudes/${solicitudId}`, {
+        method: solicitudId == null ? "POST" : "PUT",
         body: JSON.stringify({
-          nombreEmpresa: normalizarNombre(valores.nombreEmpresa),
-          rut: valores.rut.trim(),
-          correo: valores.correo.trim(),
-          telefono: componerTelefono(valores.telefono, valores.tipoTelefono),
-          periodoInicio: valores.periodoInicio.trim(),
-          periodoFin: valores.periodoFin.trim(),
-          plantilla: valores.plantilla,
-          sedes: valores.sedes,
-          descripcion: valores.descripcion.trim(),
+          nombreEmpresa: normalizarNombre(datos.nombreEmpresa),
+          rut: datos.rut.trim(),
+          correo: datos.correo.trim(),
+          telefono: componerTelefono(datos.telefono, datos.tipoTelefono),
+          periodoInicio: datos.periodoInicio.trim(),
+          periodoFin: datos.periodoFin.trim(),
+          plantilla: datos.plantilla,
+          sedes: datos.sedes,
+          descripcion: datos.descripcion.trim(),
         }),
       }),
-    onSuccess: () => onCreada(),
+    onSuccess: () => onGuardada(),
     onError: (error) => {
       if (!(error instanceof ErrorApi)) {
         setMensaje("No se pudo guardar la solicitud.");
@@ -77,8 +141,12 @@ export function FormularioSolicitud({ plantillas, sedes, onCerrar, onCreada }: P
       >
         <div className="mb-4 flex items-start justify-between gap-4">
           <div>
-            <h2 className="font-serif text-2xl">Ingresar solicitud</h2>
-            <p className="text-sm text-muted">La solicitud queda en estado solicitud ingresada.</p>
+            <h2 className="font-serif text-2xl">{solicitudId == null ? "Ingresar solicitud" : "Editar solicitud"}</h2>
+            <p className="text-sm text-muted">
+              {solicitudId == null
+                ? "La empresa y el contacto salen del cruce de los Excel. El período, la sede y la plantilla se eligen aquí."
+                : "Solo se puede corregir mientras sigue ingresada."}
+            </p>
           </div>
           <button type="button" className="text-sm text-muted" onClick={onCerrar}>
             Cerrar
@@ -91,70 +159,77 @@ export function FormularioSolicitud({ plantillas, sedes, onCerrar, onCreada }: P
           </p>
         )}
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Campo
-            id="nombreEmpresa"
-            label="Nombre de la empresa"
-            hint="Letras y números, máximo 100."
-            error={errors.nombreEmpresa?.message}
-            className="sm:col-span-2"
-            {...register("nombreEmpresa")}
-          />
-          <Campo
-            id="rut"
-            label="RUT"
-            hint="Solo números y letra K."
-            placeholder="12.345.678-K"
-            error={errors.rut?.message}
-            {...rut}
-            onChange={(evento) => {
-              evento.target.value = enmascararRut(evento.target.value);
-              void rut.onChange(evento);
-            }}
-          />
-          <Campo id="correo" label="Correo" type="email" error={errors.correo?.message} {...register("correo")} />
-          <div className="sm:col-span-2">
-            <label htmlFor="telefono" className="mb-1 block text-sm font-semibold">
-              Teléfono
-            </label>
-            <div className="flex">
-              <select
-                id="tipoTelefono"
-                aria-label="Tipo de teléfono"
-                className="shrink-0 rounded-l-md border border-line bg-paper px-3 py-2 outline-none ring-copper focus:ring-2"
-                {...tipoTelefono}
-                onChange={(evento) => {
-                  const siguiente: TipoTelefono = evento.target.value === "fijo" ? "fijo" : "celular";
-                  evento.target.value = siguiente;
-                  void tipoTelefono.onChange(evento);
-                  setValue("telefono", enmascararTelefono(watch("telefono"), siguiente), {
-                    shouldValidate: Boolean(errors.telefono),
-                  });
-                }}
-              >
-                <option value="celular">Celular</option>
-                <option value="fijo">Fijo</option>
-              </select>
-              <span className="flex w-16 shrink-0 items-center justify-center whitespace-nowrap border-y border-line bg-paper">
-                {tipo === "fijo" ? "+56" : "+569"}
-              </span>
-              <input
-                id="telefono"
-                inputMode="numeric"
-                aria-invalid={Boolean(errors.telefono)}
-                className="w-full rounded-r-md border border-line bg-white px-3 py-2 outline-none ring-copper focus:ring-2"
-                {...telefono}
-                onChange={(evento) => {
-                  evento.target.value = enmascararTelefono(evento.target.value, tipo);
-                  void telefono.onChange(evento);
-                }}
-              />
+        <label htmlFor="cliente" className="mb-1 block text-sm font-semibold">
+          Cliente del Excel
+        </label>
+        <select
+          id="cliente"
+          value={cliente}
+          onChange={(evento) => {
+            const elegido = evento.target.value;
+            setCliente(elegido);
+            if (elegido === "actual" && valores) {
+              setTelefonoExcel("");
+              setValue("nombreEmpresa", valores.nombreEmpresa, { shouldValidate: true });
+              setValue("rut", valores.rut, { shouldValidate: true });
+              setValue("correo", valores.correo, { shouldValidate: true });
+              setValue("tipoTelefono", valores.tipoTelefono, { shouldValidate: true });
+              setValue("telefono", valores.telefono, { shouldValidate: true });
+              return;
+            }
+            const fila = opciones.find((item) => claveCliente(item) === elegido);
+            if (fila) {
+              aplicarCliente(fila);
+            }
+          }}
+          className="w-full rounded-md border border-line bg-card px-3 py-2"
+        >
+          <option value="">{opciones.length === 0 ? "No hay clientes con contacto" : "Elija un cliente"}</option>
+          {valores && <option value="actual">Datos ya guardados · {valores.nombreEmpresa}</option>}
+          {opciones.map((fila) => (
+            <option key={claveCliente(fila)} value={claveCliente(fila)}>
+              {fila.empresa} · {fila.nombreContacto} · {fila.correo}
+            </option>
+          ))}
+        </select>
+        {cruce.isSuccess && opciones.length === 0 && (
+          <p className="mt-1 text-sm text-copper-dark">Cargue primero los Excel de clientes y de contactos.</p>
+        )}
+        {(errors.nombreEmpresa || errors.rut || errors.correo) && (
+          <p className="mt-1 text-sm text-copper-dark">
+            {errors.nombreEmpresa?.message ?? errors.rut?.message ?? errors.correo?.message}
+          </p>
+        )}
+        {cliente !== "" && (
+          <dl className="mt-3 grid gap-2 rounded-md border border-line bg-paper p-3 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-muted">Empresa</dt>
+              <dd>{empresa || "—"}</dd>
             </div>
-            {!errors.telefono && (
-              <p className="mt-1 text-xs text-muted">Opcional. Solo números: 8 dígitos de celular o 9 de fijo.</p>
-            )}
-            {errors.telefono && <p className="mt-1 text-sm text-copper-dark">{errors.telefono.message}</p>}
-          </div>
+            <div>
+              <dt className="text-muted">RUT</dt>
+              <dd>{rut || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Correo</dt>
+              <dd>{correo || "—"}</dd>
+            </div>
+            <div>
+              <dt className="text-muted">Teléfono</dt>
+              <dd>
+                {esNoAplica(telefono)
+                  ? NO_APLICA
+                  : telefono
+                    ? `${tipo === "fijo" ? "+56" : "+569"} ${telefono}`
+                    : telefonoExcel
+                      ? `No se usará (${telefonoExcel})`
+                      : "Sin teléfono"}
+              </dd>
+            </div>
+          </dl>
+        )}
+
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <CampoFecha
             id="periodoInicio"
             label="Período de inicio"
@@ -231,37 +306,13 @@ export function FormularioSolicitud({ plantillas, sedes, onCerrar, onCreada }: P
           </button>
           <button
             type="submit"
-            disabled={crear.isPending}
+            disabled={crear.isPending || (solicitudId == null && cliente === "")}
             className="rounded-md bg-copper px-4 py-2 text-sm font-semibold text-white hover:bg-copper-dark disabled:opacity-60"
           >
-            Guardar solicitud
+            {solicitudId == null ? "Guardar solicitud" : "Guardar cambios"}
           </button>
         </div>
       </form>
-    </div>
-  );
-}
-
-type CampoProps = ComponentProps<"input"> & {
-  label: string;
-  hint?: string;
-  error?: string;
-};
-
-function Campo({ id, label, hint, error, className = "", ...props }: CampoProps) {
-  return (
-    <div className={className}>
-      <label htmlFor={id} className="mb-1 block text-sm font-semibold">
-        {label}
-      </label>
-      <input
-        id={id}
-        aria-invalid={Boolean(error)}
-        className="w-full rounded-md border border-line bg-white px-3 py-2 outline-none ring-copper focus:ring-2"
-        {...props}
-      />
-      {hint && !error && <p className="mt-1 text-xs text-muted">{hint}</p>}
-      {error && <p className="mt-1 text-sm text-copper-dark">{error}</p>}
     </div>
   );
 }

@@ -27,6 +27,7 @@ import cl.copat.evalua.publico.api.EncuestaPublicaResponse;
 import cl.copat.evalua.publico.api.EncuestaPublicaResponse.PreguntaPublica;
 import cl.copat.evalua.publico.api.EncuestaPublicaResponse.RespuestaGuardada;
 import cl.copat.evalua.publico.api.EnlaceResponse;
+import cl.copat.evalua.publico.api.VistaEnvioResponse;
 import cl.copat.evalua.publico.api.RespuestaEncuestaRequest;
 import cl.copat.evalua.publico.persistencia.EnlaceEncuesta;
 import cl.copat.evalua.publico.persistencia.EnlaceEncuestaRepository;
@@ -110,16 +111,16 @@ public class EncuestaPublicaService {
     return new EnlaceResponse(enlace.getToken(), abierta(solicitud.getEstado().getNombre()), false, "", "");
   }
 
+  @Transactional(readOnly = true)
+  public VistaEnvioResponse vista(long id, UsuarioPrincipal principal) {
+    Solicitud solicitud = operable(id, principal);
+    EnlaceEncuesta enlace = enlaces.findById(id).orElse(null);
+    return correos.vista(solicitud, enlace == null ? null : enlace.getToken());
+  }
+
   @Transactional
-  public EnlaceResponse crear(long id, UsuarioPrincipal principal) {
-    if (!Catalogo.operaSolicitudes(principal.departamentoId())) {
-      throw new ResponseStatusException(HttpStatus.FORBIDDEN, Mensajes.PROHIBIDO);
-    }
-    Solicitud solicitud = solicitudes.buscar(id)
-        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO));
-    if (solicitud.getDepartamento().getId() != Catalogo.DEPARTAMENTO_1) {
-      throw new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO);
-    }
+  public EnlaceResponse crear(long id, UsuarioPrincipal principal, boolean enviarCorreo) {
+    Solicitud solicitud = operable(id, principal);
     if (Catalogo.ESTADO_INICIAL.equals(solicitud.getEstado().getNombre())) {
       Usuario usuario = usuarios.findById(principal.id())
           .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, Mensajes.SESION));
@@ -132,6 +133,14 @@ public class EncuestaPublicaService {
         throw new ReglaNegocioException(Mensajes.ENLACE_ESTADO);
       }
       enlace = enlaces.saveAndFlush(new EnlaceEncuesta(id, token(), LocalDateTime.now(reloj)));
+    }
+    if (!enviarCorreo) {
+      return new EnlaceResponse(
+          enlace.getToken(),
+          abierta(estado),
+          false,
+          "",
+          "El enlace quedó listo para compartir por WhatsApp.");
     }
     CorreoEncuesta.Resultado correo = correos.enviar(solicitud, enlace.getToken());
     return new EnlaceResponse(
@@ -276,6 +285,18 @@ public class EncuestaPublicaService {
         notas,
         resultado.promedio(),
         resultado.desempeno());
+  }
+
+  private Solicitud operable(long id, UsuarioPrincipal principal) {
+    if (!Catalogo.operaSolicitudes(principal.departamentoId())) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, Mensajes.PROHIBIDO);
+    }
+    Solicitud solicitud = solicitudes.buscar(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO));
+    if (solicitud.getDepartamento().getId() != Catalogo.DEPARTAMENTO_1) {
+      throw new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO);
+    }
+    return solicitud;
   }
 
   private EnlaceEncuesta buscar(String token) {

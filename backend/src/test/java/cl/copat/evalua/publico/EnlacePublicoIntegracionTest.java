@@ -64,7 +64,7 @@ class EnlacePublicoIntegracionTest {
     long id = json.readTree(crear(depto1).getResponse().getContentAsString()).get("id").asLong();
     MockHttpSession depto2 = ingresar("semilla2@copat.cl", "semilla2");
 
-    MvcResult enlace = mockMvc.perform(post("/api/departamento2/solicitudes/" + id + "/enlace")
+    MvcResult enlace = mockMvc.perform(post("/api/departamento1/solicitudes/" + id + "/enlace")
             .session(depto2)
             .cookie(csrf)
             .header("X-XSRF-TOKEN", csrf.getValue()))

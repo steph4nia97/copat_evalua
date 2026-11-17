@@ -78,6 +78,7 @@ public class CuentaController {
     return new UsuarioResponse(
         usuario.getEmail(),
         usuario.getNombre(),
+        usuario.getCargo(),
         Catalogo.nombreDepartamento(departamentoId),
         departamentoId,
         usuario.isClaveProvisoria());

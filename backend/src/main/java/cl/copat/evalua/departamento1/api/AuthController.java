@@ -1,6 +1,7 @@
 package cl.copat.evalua.departamento1.api;
 
 import cl.copat.evalua.departamento1.aplicacion.AutenticacionService;
+import cl.copat.evalua.departamento1.aplicacion.CuentaDesactivadaException;
 import cl.copat.evalua.departamento1.dominio.Catalogo;
 import cl.copat.evalua.departamento1.dominio.Mensajes;
 import cl.copat.evalua.departamento1.persistencia.Usuario;
@@ -61,6 +62,9 @@ public class AuthController {
       sesiones.saveContext(contexto, request, response);
       Usuario usuario = usuarios.findById(principal.id()).orElseThrow();
       return ResponseEntity.ok(respuesta(usuario));
+    } catch (CuentaDesactivadaException ex) {
+      SecurityContextHolder.clearContext();
+      return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ErrorRespuesta(ex.getMessage()));
     } catch (BadCredentialsException ex) {
       SecurityContextHolder.clearContext();
       return noAutorizado();
@@ -96,6 +100,7 @@ public class AuthController {
     return new UsuarioResponse(
         usuario.getEmail(),
         usuario.getNombre(),
+        usuario.getCargo(),
         Catalogo.nombreDepartamento(departamentoId),
         departamentoId,
         usuario.isClaveProvisoria());

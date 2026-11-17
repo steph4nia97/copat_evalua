@@ -3,8 +3,8 @@ package cl.copat.evalua.departamento1.aplicacion;
 import cl.copat.evalua.departamento1.api.CargaResponse;
 import cl.copat.evalua.departamento1.api.CruceResponse;
 import cl.copat.evalua.departamento1.dominio.Catalogo;
-import cl.copat.evalua.departamento1.dominio.Correo;
 import cl.copat.evalua.departamento1.dominio.Mensajes;
+import cl.copat.evalua.departamento1.dominio.NoAplica;
 import cl.copat.evalua.departamento1.dominio.Rut;
 import cl.copat.evalua.departamento1.persistencia.Cliente;
 import cl.copat.evalua.departamento1.persistencia.ClienteRepository;
@@ -20,6 +20,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
@@ -96,12 +97,12 @@ public class CatalogoClienteService {
     String colEmpresa = columna(hoja, "empresa", "razon social");
     String colCorreo = columna(hoja, "contacto", "correo", "email", "e mail", "mail");
     String colTelefono = columna(hoja, "telefono", "fono");
-    if (colRut == null || colNombre == null || colEmpresa == null || colCorreo == null) {
+    if (colRut == null || colNombre == null || colEmpresa == null) {
       throw new ReglaNegocioException(Mensajes.EXCEL_CONTACTOS);
     }
     Map<String, Contacto> porClave = new LinkedHashMap<>();
     for (Contacto contacto : contactos.findAll()) {
-      porClave.put(contacto.getRut() + "|" + contacto.getCorreo(), contacto);
+      porClave.put(claveContacto(contacto.getRut(), contacto.getCorreo(), contacto.getNombre()), contacto);
     }
     int guardados = 0;
     int omitidos = 0;
@@ -110,13 +111,10 @@ public class CatalogoClienteService {
       String rut = Rut.normalizar(fila.get(colRut));
       String nombre = texto(fila.get(colNombre));
       String empresa = texto(fila.get(colEmpresa));
-      String correo = Correo.normalizar(fila.get(colCorreo));
-      String telefono = colTelefono == null ? "" : texto(fila.get(colTelefono));
-      if (telefono.length() > 20) {
-        telefono = telefono.substring(0, 20);
-      }
+      String correoCrudo = colCorreo == null ? "" : fila.get(colCorreo);
+      String telefono = NoAplica.telefono(colTelefono == null ? "" : fila.get(colTelefono));
       if (!Rut.esValido(fila.get(colRut)) || nombre.isEmpty() || nombre.length() > 120
-          || empresa.isEmpty() || empresa.length() > 150 || !Correo.esValido(correo)) {
+          || empresa.isEmpty() || empresa.length() > 150 || !NoAplica.correoAceptado(correoCrudo)) {
         omitidos++;
         avisar(avisos, "Fila " + fila.get("__fila") + ": revise RUT, razón social, nombre contacto y correo.");
         continue;
@@ -126,12 +124,14 @@ public class CatalogoClienteService {
         avisar(avisos, "Fila " + fila.get("__fila") + ": el RUT " + Rut.formatear(rut) + " no está entre los clientes seleccionados.");
         continue;
       }
-      Contacto actual = porClave.get(rut + "|" + correo);
+      String correo = NoAplica.correo(correoCrudo);
+      String clave = claveContacto(rut, correo, nombre);
+      Contacto actual = porClave.get(clave);
       if (actual == null) {
-        Contacto nuevo = contactos.save(new Contacto(rut, nombre, empresa, correo, telefono.isEmpty() ? null : telefono));
-        porClave.put(rut + "|" + correo, nuevo);
+        Contacto nuevo = contactos.save(new Contacto(rut, nombre, empresa, correo, telefono));
+        porClave.put(clave, nuevo);
       } else {
-        actual.actualizar(nombre, empresa, telefono.isEmpty() ? null : telefono);
+        actual.actualizar(nombre, empresa, telefono);
       }
       guardados++;
     }
@@ -203,6 +203,13 @@ public class CatalogoClienteService {
       return razon;
     }
     return colNombre == null ? "" : texto(fila.get(colNombre));
+  }
+
+  private static String claveContacto(String rut, String correo, String nombre) {
+    if (NoAplica.es(correo)) {
+      return rut + "|no-aplica|" + nombre.toLowerCase(Locale.ROOT);
+    }
+    return rut + "|" + correo;
   }
 
   private static String texto(String valor) {

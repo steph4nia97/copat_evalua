@@ -29,8 +29,6 @@ export function CargaDatos() {
     queryFn: () => api<Cruce[]>("/api/departamento1/cruce"),
   });
   const filas = cruce.data ?? [];
-  const clientes = [...new Map(filas.map((fila) => [fila.rut, fila])).values()];
-  const contactos = filas.filter((fila) => fila.nombreContacto);
 
   async function subir(ruta: string, archivo: File | null, destino: "clientes" | "contactos") {
     const setAviso = destino === "clientes" ? setAvisoClientes : setAvisoContactos;
@@ -72,40 +70,12 @@ export function CargaDatos() {
             {errorClientes}
           </p>
         )}
-        <div className="mt-4 overflow-x-auto">
-          <table className="min-w-full text-left text-sm">
-            <thead className="bg-paper text-muted">
-              <tr>
-                {["Empresa", "RUT"].map((columna) => (
-                  <th key={columna} className="px-3 py-2 font-semibold">
-                    {columna}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {clientes.map((fila) => (
-                <tr key={fila.rut} className="border-t border-line">
-                  <td className="px-3 py-3 font-semibold">{fila.empresa}</td>
-                  <td className="px-3 py-3">{fila.rut}</td>
-                </tr>
-              ))}
-              {clientes.length === 0 && (
-                <tr>
-                  <td colSpan={2} className="px-3 py-8 text-center text-muted">
-                    Todavía no hay clientes cargados.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </section>
 
       <section className="rounded-xl border border-line bg-card p-5">
         <h2 className="font-serif text-2xl">Contacto de clientes</h2>
         <p className="mt-1 text-sm text-muted">
-          Columnas: RUT, Razón social, Nombre contacto, Correo y Teléfono. El RUT tiene que existir en los datos de clientes.
+          Columnas: RUT, Razón social, Nombre contacto, Correo y Teléfono. El contacto se cruza con el cliente por el RUT, así que ese RUT tiene que estar cargado antes. Si el correo o el teléfono vienen vacíos, se guardan como No aplica.
         </p>
         <input
           type="file"
@@ -120,11 +90,18 @@ export function CargaDatos() {
             {errorContactos}
           </p>
         )}
+      </section>
+
+      <section className="rounded-xl border border-line bg-card p-5">
+        <h2 className="font-serif text-2xl">Cruce</h2>
+        <p className="mt-1 text-sm text-muted">
+          Cada cliente queda junto al contacto del mismo RUT. Si el cliente no tiene contacto, la fila lo indica.
+        </p>
         <div className="mt-4 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="bg-paper text-muted">
               <tr>
-                {["Nombre", "Empresa", "RUT", "Correo", "Teléfono"].map((columna) => (
+                {["Cliente", "RUT", "Contacto", "Correo", "Teléfono"].map((columna) => (
                   <th key={columna} className="px-3 py-2 font-semibold">
                     {columna}
                   </th>
@@ -132,19 +109,19 @@ export function CargaDatos() {
               </tr>
             </thead>
             <tbody>
-              {contactos.map((fila) => (
-                <tr key={`${fila.rut}-${fila.correo}`} className="border-t border-line">
-                  <td className="px-3 py-3 font-semibold">{fila.nombreContacto}</td>
-                  <td className="px-3 py-3">{fila.empresaContacto ?? fila.empresa}</td>
+              {filas.map((fila) => (
+                <tr key={`${fila.rut}-${fila.correo ?? "sin"}-${fila.nombreContacto ?? "sin"}`} className="border-t border-line">
+                  <td className="px-3 py-3 font-semibold">{fila.empresa}</td>
                   <td className="px-3 py-3">{fila.rut}</td>
+                  <td className="px-3 py-3">{fila.nombreContacto ?? "Sin contacto"}</td>
                   <td className="px-3 py-3">{fila.correo ?? "—"}</td>
                   <td className="px-3 py-3">{fila.telefono ?? "—"}</td>
                 </tr>
               ))}
-              {contactos.length === 0 && (
+              {filas.length === 0 && (
                 <tr>
                   <td colSpan={5} className="px-3 py-8 text-center text-muted">
-                    Todavía no hay contactos cargados.
+                    Todavía no hay datos para cruzar.
                   </td>
                 </tr>
               )}

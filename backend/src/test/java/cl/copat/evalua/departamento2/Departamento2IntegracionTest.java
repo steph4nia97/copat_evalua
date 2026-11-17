@@ -77,7 +77,7 @@ class Departamento2IntegracionTest {
     assertThat(sesion.get("departamentoId").asInt()).isEqualTo(1);
 
     MockHttpSession depto3Ajeno = ingresar("semilla3@copat.cl", "semilla3");
-    assertThat(mockMvc.perform(post("/api/departamento2/solicitudes/" + id + "/enviada").session(depto3Ajeno)
+    assertThat(mockMvc.perform(post("/api/departamento1/solicitudes/" + id + "/enviada").session(depto3Ajeno)
             .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue()))
         .andReturn().getResponse().getStatus()).isEqualTo(403);
 
@@ -85,13 +85,13 @@ class Departamento2IntegracionTest {
     assertThat(temprano.getResponse().getStatus()).isEqualTo(400);
     assertThat(temprano.getResponse().getContentAsString()).contains(Mensajes.ESTADO_ENVIADA);
 
-    MvcResult enviada = mockMvc.perform(post("/api/departamento2/solicitudes/" + id + "/enviada").session(depto2)
+    MvcResult enviada = mockMvc.perform(post("/api/departamento1/solicitudes/" + id + "/enviada").session(depto2)
             .cookie(csrf).header("X-XSRF-TOKEN", csrf.getValue()))
         .andReturn();
     assertThat(json.readTree(enviada.getResponse().getContentAsString()).get("estado").asText())
         .isEqualTo("solicitud enviada a cliente");
 
-    byte[] guia = mockMvc.perform(get("/api/departamento2/solicitudes/" + id + "/guia").session(depto2))
+    byte[] guia = mockMvc.perform(get("/api/departamento1/solicitudes/" + id + "/guia").session(depto2))
         .andReturn().getResponse().getContentAsByteArray();
     assertThat(new String(guia, 0, 4)).isEqualTo("%PDF");
 
@@ -139,7 +139,7 @@ class Departamento2IntegracionTest {
     assertThat(seguida.get("seguimiento").asText()).isEqualTo("En gestión");
     assertThat(seguida.get("notasSeguimiento")).hasSize(1);
 
-    JsonNode operacion = json.readTree(mockMvc.perform(get("/api/departamento2/solicitudes").session(depto2))
+    JsonNode operacion = json.readTree(mockMvc.perform(get("/api/departamento1/solicitudes").session(depto2))
         .andReturn().getResponse().getContentAsString());
     JsonNode fila = null;
     for (JsonNode item : operacion) {
@@ -155,7 +155,7 @@ class Departamento2IntegracionTest {
     assertThat(cerrada.getResponse().getStatus()).isEqualTo(200);
     assertThat(json.readTree(cerrada.getResponse().getContentAsString()).get("seguimiento").asText()).isEqualTo("Cerrada");
     assertThat(json.readTree(cerrada.getResponse().getContentAsString()).get("notasSeguimiento")).hasSize(2);
-    JsonNode despues = json.readTree(mockMvc.perform(get("/api/departamento2/solicitudes").session(depto2))
+    JsonNode despues = json.readTree(mockMvc.perform(get("/api/departamento1/solicitudes").session(depto2))
         .andReturn().getResponse().getContentAsString());
     JsonNode cerradaParaOperacion = null;
     for (JsonNode item : despues) {
@@ -184,7 +184,7 @@ class Departamento2IntegracionTest {
   }
 
   private MvcResult enviarPdf(MockHttpSession sesion, long id, byte[] pdf) throws Exception {
-    return mockMvc.perform(multipart("/api/departamento2/solicitudes/" + id + "/pdf")
+    return mockMvc.perform(multipart("/api/departamento1/solicitudes/" + id + "/pdf")
             .file(new MockMultipartFile("archivo", "guia.pdf", "application/pdf", pdf))
             .session(sesion)
             .cookie(csrf)

@@ -12,6 +12,9 @@ public interface SolicitudRepository extends JpaRepository<Solicitud, Long> {
 
   boolean existsByRutAndPeriodoInicioAndPeriodoFin(String rut, LocalDate periodoInicio, LocalDate periodoFin);
 
+  boolean existsByRutAndPeriodoInicioAndPeriodoFinAndIdNot(
+      String rut, LocalDate periodoInicio, LocalDate periodoFin, Long id);
+
   @Query("""
       select distinct s from Solicitud s
       join fetch s.plantilla

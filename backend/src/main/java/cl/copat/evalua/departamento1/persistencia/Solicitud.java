@@ -157,6 +157,25 @@ public class Solicitud {
     this.estado = estado;
   }
 
+  public void editar(
+      String nombreEmpresa,
+      String rut,
+      String correo,
+      String telefono,
+      LocalDate periodoInicio,
+      LocalDate periodoFin,
+      Plantilla plantilla,
+      String descripcion) {
+    this.nombreEmpresa = nombreEmpresa;
+    this.rut = rut;
+    this.correo = correo;
+    this.telefono = telefono;
+    this.periodoInicio = periodoInicio;
+    this.periodoFin = periodoFin;
+    this.plantilla = plantilla;
+    this.descripcion = descripcion;
+  }
+
   public void asignarSedes(Collection<Sede> elegidas) {
     sedes.clear();
     sedes.addAll(elegidas);

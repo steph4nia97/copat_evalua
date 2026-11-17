@@ -1,6 +1,7 @@
 package cl.copat.evalua.departamento1.aplicacion;
 
 import cl.copat.evalua.departamento1.dominio.Catalogo;
+import cl.copat.evalua.departamento1.dominio.Mensajes;
 import cl.copat.evalua.departamento1.persistencia.Usuario;
 import cl.copat.evalua.departamento1.persistencia.UsuarioRepository;
 import cl.copat.evalua.departamento1.seguridad.UsuarioPrincipal;
@@ -29,7 +30,6 @@ public class AutenticacionService {
     short departamento = usuario == null ? 0 : usuario.getDepartamento().getId();
     if (usuario == null
         || (departamento != Catalogo.DEPARTAMENTO_1
-            && departamento != Catalogo.DEPARTAMENTO_2
             && departamento != Catalogo.DEPARTAMENTO_3
             && departamento != Catalogo.DEPARTAMENTO_ADMIN)) {
       passwordEncoder.matches(clave, hashFicticio);
@@ -37,6 +37,9 @@ public class AutenticacionService {
     }
     if (!passwordEncoder.matches(clave, usuario.getPasswordHash())) {
       throw new BadCredentialsException("fail");
+    }
+    if (!usuario.isActivo()) {
+      throw new CuentaDesactivadaException(Mensajes.CUENTA_DESACTIVADA);
     }
     return new UsuarioPrincipal(
         usuario.getId(),

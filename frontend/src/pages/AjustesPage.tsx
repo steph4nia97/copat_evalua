@@ -75,6 +75,11 @@ export function AjustesPage() {
       <Encabezado />
       <main className="mx-auto max-w-xl px-4 py-6">
         <h1 className="font-serif text-3xl">Ajustes</h1>
+        <section className="mt-5 rounded-xl border border-line bg-card p-4">
+          <h2 className="font-semibold">Cargo</h2>
+          <p className="mt-1 text-sm text-muted">Lo asigna administración. Desde aquí no se puede cambiar.</p>
+          <p className="mt-3 rounded-md border border-line bg-paper px-3 py-2">{usuario?.cargo || "Por asignar"}</p>
+        </section>
         {usuario?.claveProvisoria && (
           <p className="mt-3 rounded-md bg-amber-100 px-3 py-2 text-sm text-amber-950">
             La contraseña actual es provisoria. Cámbiela desde este menú.

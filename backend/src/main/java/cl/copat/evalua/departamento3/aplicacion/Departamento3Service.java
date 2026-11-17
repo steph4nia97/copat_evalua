@@ -138,7 +138,7 @@ public class Departamento3Service {
           solicitud.getPlantilla().getNombre(),
           sedesDe(cargadas.get(solicitud.getId())),
           solicitud.getDescripcion(),
-          solicitud.getCreadoPor().getNombre(),
+          solicitud.getCreadoPor().nombreVisible(),
           movimientos.getOrDefault(solicitud.getId(), List.of()),
           evaluacion.getNombreEncuestado(),
           evaluacion.getEmpresaEncuesta(),
@@ -162,7 +162,7 @@ public class Departamento3Service {
   private MovimientoResponse movimiento(SolicitudLog log) {
     return new MovimientoResponse(
         log.getAccion(),
-        log.getUsuario().getNombre(),
+        log.getUsuario().nombreVisible(),
         Fechas.format(log.getFecha()),
         log.getHora().format(HORA));
   }
@@ -188,7 +188,7 @@ public class Departamento3Service {
         nota.getId(),
         nota.getNota(),
         nota.getEstado(),
-        nota.getUsuario().getNombre(),
+        nota.getUsuario().nombreVisible(),
         Fechas.format(nota.getCreadaEn().toLocalDate()),
         nota.getCreadaEn().toLocalTime().format(HORA));
   }
@@ -296,6 +296,8 @@ public class Departamento3Service {
         evaluacion.getPromedio(),
         puntajes,
         evaluacion.getRecibidaEn().format(MARCA),
+        solicitud.getCorreo(),
+        solicitud.getTelefono(),
         solicitud.getVecesRechazada());
   }
 

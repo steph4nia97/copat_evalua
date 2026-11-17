@@ -17,7 +17,8 @@ type Indicador = {
   promedio: number;
   notas: Nota[];
   fecha: string;
-  vecesRechazada: number;
+  correo: string | null;
+  telefono: string | null;
 };
 
 const DESEMPENOS = ["Destacado", "Satisfactorio", "Regular", "Insuficiente"];
@@ -58,6 +59,8 @@ export function IndicadoresPage() {
   const indicadores = useQuery({
     queryKey: ["d3-indicadores"],
     queryFn: () => api<Indicador[]>("/api/departamento3/indicadores"),
+    refetchInterval: 15000,
+    refetchIntervalInBackground: true,
   });
   const datos = indicadores.data ?? [];
   const obras = [...new Set(datos.map((item) => item.estadoObra))];
@@ -124,7 +127,7 @@ export function IndicadoresPage() {
           ))}
         </div>
 
-        <section className="mt-4 grid gap-3 sm:grid-cols-4">
+        <section className="mt-4 grid gap-3 sm:grid-cols-3">
           <article className="rounded-xl border border-line bg-card p-4">
             <p className="text-xs uppercase tracking-wide text-muted">Encuestas</p>
             <p className="font-serif text-4xl">{visibles.length}</p>
@@ -133,10 +136,6 @@ export function IndicadoresPage() {
             <p className="text-xs uppercase tracking-wide text-pine">Promedio del filtro</p>
             <p className="font-serif text-4xl text-pine">{visibles.length ? texto(promedio) : "—"}</p>
             <p className="text-sm">{visibles.length ? clasificar(promedio) : "Sin encuestas"}</p>
-          </article>
-          <article className="rounded-xl border border-line bg-card p-4">
-            <p className="text-xs uppercase tracking-wide text-muted">Volvieron de un rechazo</p>
-            <p className="font-serif text-4xl">{visibles.filter((item) => item.vecesRechazada > 0).length}</p>
           </article>
         </section>
 
@@ -196,6 +195,9 @@ export function IndicadoresPage() {
             <p className="mt-1 font-serif text-2xl">{seleccionado.empresa}</p>
             <p className="text-sm text-muted">{seleccionado.sedes.length ? seleccionado.sedes.join(", ") : "Sin sede"} · {seleccionado.obra} · {seleccionado.fecha}</p>
             <p className="mt-2 text-sm">
+              Correo {seleccionado.correo?.trim() || "No aplica"} · Teléfono {seleccionado.telefono?.trim() || "No aplica"}
+            </p>
+            <p className="mt-2 text-sm">
               Esta encuesta tiene {texto(Number(seleccionado.promedio))} ({seleccionado.desempeno}). El filtro está en {visibles.length ? texto(promedio) : "—"}.
             </p>
           </section>
@@ -205,7 +207,7 @@ export function IndicadoresPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-paper text-muted">
               <tr>
-                {["Fecha", "Empresa", "Sede", "Obra", "Estado de la obra", "Promedio", "Evaluación"].map((columna) => (
+                {["Fecha", "Empresa", "Contacto", "Sede", "Obra", "Estado de la obra", "Promedio", "Evaluación"].map((columna) => (
                   <th key={columna} className="px-3 py-2 font-semibold">{columna}</th>
                 ))}
               </tr>
@@ -219,21 +221,20 @@ export function IndicadoresPage() {
                 >
                   <td className="whitespace-nowrap px-3 py-2">{item.fecha}</td>
                   <td className="px-3 py-2">{item.empresa}</td>
+                  <td className="px-3 py-2">
+                    <p>{item.correo?.trim() || "No aplica"}</p>
+                    <p className="mt-1">{item.telefono?.trim() || "No aplica"}</p>
+                  </td>
                   <td className="px-3 py-2">{item.sedes.length ? item.sedes.join(", ") : "Sin sede"}</td>
                   <td className="px-3 py-2">{item.obra}</td>
                   <td className="px-3 py-2">{item.estadoObra}</td>
                   <td className="px-3 py-2">{texto(Number(item.promedio))}</td>
-                  <td className="px-3 py-2">
-                    {item.desempeno}
-                    {item.vecesRechazada > 0 && item.estado === "solicitud en revision" && (
-                      <span className="ml-2 rounded-full bg-copper px-2 py-0.5 text-xs text-white">Volvió tras un rechazo</span>
-                    )}
-                  </td>
+                  <td className="px-3 py-2">{item.desempeno}</td>
                 </tr>
               ))}
               {visibles.length === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-muted">No hay encuestas para este filtro.</td>
+                  <td colSpan={8} className="px-3 py-8 text-center text-muted">No hay encuestas para este filtro.</td>
                 </tr>
               )}
             </tbody>

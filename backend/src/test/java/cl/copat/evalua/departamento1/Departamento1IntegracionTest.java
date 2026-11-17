@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import cl.copat.evalua.departamento1.dominio.Catalogo;
@@ -111,6 +112,41 @@ class Departamento1IntegracionTest {
     JsonNode log = json.readTree(mockMvc.perform(get("/api/departamento1/bitacora").session(sesion))
         .andReturn().getResponse().getContentAsString());
     assertThat(log).isEmpty();
+  }
+
+  @Test
+  void editaSoloUnaSolicitudIngresada() throws Exception {
+    MockHttpSession sesion = ingresar();
+    MvcResult creada = crear(sesion, solicitud("Empresa Uno", "12.345.678-5", "01/02/2026", "28/02/2026"));
+    long id = json.readTree(creada.getResponse().getContentAsString()).get("id").asLong();
+    Map<String, Object> cambios = solicitud("Empresa Dos", "12.345.678-5", "01/02/2026", "28/02/2026");
+    cambios.put("descripcion", "Período corregido");
+
+    MvcResult editada = mockMvc.perform(put("/api/departamento1/solicitudes/" + id)
+            .session(sesion)
+            .cookie(csrf)
+            .header("X-XSRF-TOKEN", csrf.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(cambios)))
+        .andReturn();
+    assertThat(editada.getResponse().getStatus()).isEqualTo(200);
+    assertThat(json.readTree(editada.getResponse().getContentAsString()).get("nombreEmpresa").asText())
+        .isEqualTo("Empresa Dos");
+
+    mockMvc.perform(post("/api/departamento1/solicitudes/" + id + "/enviada")
+            .session(sesion)
+            .cookie(csrf)
+            .header("X-XSRF-TOKEN", csrf.getValue()))
+        .andExpect(status().isOk());
+    MvcResult bloqueada = mockMvc.perform(put("/api/departamento1/solicitudes/" + id)
+            .session(sesion)
+            .cookie(csrf)
+            .header("X-XSRF-TOKEN", csrf.getValue())
+            .contentType(MediaType.APPLICATION_JSON)
+            .content(json.writeValueAsString(cambios)))
+        .andReturn();
+    assertThat(bloqueada.getResponse().getStatus()).isEqualTo(400);
+    assertThat(bloqueada.getResponse().getContentAsString()).contains(Mensajes.EDICION_INGRESADA);
   }
 
   @Test

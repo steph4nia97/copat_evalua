@@ -6,7 +6,7 @@ public final class NombreEmpresa {
 
   public static final int MAX = 100;
   private static final Pattern PATRON = Pattern.compile(
-      "^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+( [A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9]+)*$");
+      "^[A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9.,&'()/-]+(?: [A-Za-zÁÉÍÓÚÜÑáéíóúüñ0-9.,&'()/-]+)*$");
 
   private NombreEmpresa() {}
 

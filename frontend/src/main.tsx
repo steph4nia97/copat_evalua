@@ -8,7 +8,7 @@ import "./index.css";
 
 const consultas = new QueryClient({
   defaultOptions: {
-    queries: { retry: false, refetchOnWindowFocus: false },
+    queries: { retry: false },
   },
 });
 

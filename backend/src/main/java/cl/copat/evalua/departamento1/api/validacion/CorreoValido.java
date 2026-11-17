@@ -2,6 +2,7 @@ package cl.copat.evalua.departamento1.api.validacion;
 
 import cl.copat.evalua.departamento1.dominio.Correo;
 import cl.copat.evalua.departamento1.dominio.Mensajes;
+import cl.copat.evalua.departamento1.dominio.NoAplica;
 import jakarta.validation.Constraint;
 import jakarta.validation.ConstraintValidator;
 import jakarta.validation.ConstraintValidatorContext;
@@ -31,10 +32,10 @@ public @interface CorreoValido {
       if (value == null || value.isBlank()) {
         return Rechazo.de(context, Mensajes.CORREO_REQUERIDO);
       }
-      if (!Correo.esValido(Correo.normalizar(value))) {
-        return Rechazo.de(context, Mensajes.CORREO);
+      if (NoAplica.es(value) || Correo.esValido(Correo.normalizar(value))) {
+        return true;
       }
-      return true;
+      return Rechazo.de(context, Mensajes.CORREO);
     }
   }
 }
