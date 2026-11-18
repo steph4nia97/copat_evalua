@@ -22,12 +22,6 @@ type Indicador = {
 };
 
 const DESEMPENOS = ["Destacado", "Satisfactorio", "Regular", "Insuficiente"];
-const COLORES: Record<string, string> = {
-  Destacado: "#1f6b4a",
-  Satisfactorio: "#2f6f8f",
-  Regular: "#c4842a",
-  Insuficiente: "#9a3d2f",
-};
 
 function texto(valor: number) {
   return valor.toLocaleString("es-CL", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -81,7 +75,6 @@ export function IndicadoresPage() {
     nivel,
     cantidad: visibles.filter((item) => item.desempeno === nivel).length,
   }));
-  const maximo = Math.max(...porNivel.map((nivel) => nivel.cantidad), 1);
   const seleccionado = visibles.find((item) => item.id === activo) ?? null;
 
   function alternarNivel(nivel: string) {
@@ -132,10 +125,10 @@ export function IndicadoresPage() {
             <p className="text-xs uppercase tracking-wide text-muted">Encuestas</p>
             <p className="font-serif text-4xl">{visibles.length}</p>
           </article>
-          <article className="rounded-xl border border-pine/20 bg-pine-soft p-4 sm:col-span-2">
-            <p className="text-xs uppercase tracking-wide text-pine">Promedio del filtro</p>
-            <p className="font-serif text-4xl text-pine">{visibles.length ? texto(promedio) : "—"}</p>
-            <p className="text-sm">{visibles.length ? clasificar(promedio) : "Sin encuestas"}</p>
+          <article className="rounded-xl border border-line bg-card p-4 sm:col-span-2">
+            <p className="text-xs uppercase tracking-wide text-muted">Promedio del filtro</p>
+            <p className="font-serif text-4xl">{visibles.length ? texto(promedio) : "—"}</p>
+            <p className="text-sm text-muted">{visibles.length ? clasificar(promedio) : "Sin encuestas"}</p>
           </article>
         </section>
 
@@ -163,27 +156,25 @@ export function IndicadoresPage() {
           </div>
           <div className="rounded-xl border border-line bg-card p-4 lg:col-span-2">
             <h2 className="font-semibold">Desempeño</h2>
-            <ul className="mt-3 space-y-3">
-              {porNivel.map((nivel) => (
-                <li key={nivel.nivel}>
-                  <button type="button" className="w-full text-left" onClick={() => alternarNivel(nivel.nivel)}>
-                    <span className="flex justify-between text-sm">
+            <ul className="mt-3 space-y-1">
+              {porNivel.map((nivel) => {
+                const elegido = desempeno === nivel.nivel;
+                return (
+                  <li key={nivel.nivel}>
+                    <button
+                      type="button"
+                      aria-pressed={elegido}
+                      className={`flex w-full items-center justify-between rounded-md border px-3 py-2 text-left text-sm ${
+                        elegido ? "border-ink bg-paper font-semibold text-ink" : "border-line bg-card text-muted"
+                      }`}
+                      onClick={() => alternarNivel(nivel.nivel)}
+                    >
                       <span>{nivel.nivel}</span>
                       <span>{nivel.cantidad}</span>
-                    </span>
-                    <span className="mt-1 block h-3 overflow-hidden rounded-full bg-paper">
-                      <span
-                        className="block h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${(nivel.cantidad / maximo) * 100}%`,
-                          background: COLORES[nivel.nivel],
-                          outline: desempeno === nivel.nivel ? "2px solid #16332f" : "none",
-                        }}
-                      />
-                    </span>
-                  </button>
-                </li>
-              ))}
+                    </button>
+                  </li>
+                );
+              })}
             </ul>
             {desempeno && <button type="button" className="mt-3 text-sm text-muted" onClick={() => setDesempeno("")}>Quitar filtro de evaluación</button>}
           </div>

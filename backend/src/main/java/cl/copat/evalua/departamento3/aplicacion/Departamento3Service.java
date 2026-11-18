@@ -207,6 +207,9 @@ public class Departamento3Service {
     if (!Catalogo.ESTADO_EN_REVISION.equals(solicitud.getEstado().getNombre())) {
       throw new ReglaNegocioException(Mensajes.REVISION_AUSENTE);
     }
+    if (Catalogo.SEGUIMIENTO_CERRADA.equals(solicitud.getSeguimiento())) {
+      throw new ReglaNegocioException(Mensajes.SEGUIMIENTO_CERRADO);
+    }
     String texto = descripcion == null ? "" : descripcion.trim();
     if (texto.isEmpty()) {
       throw new ReglaNegocioException(Mensajes.REVISE, Map.of("descripcion", Mensajes.DESCRIPCION_REVISION));

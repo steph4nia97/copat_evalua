@@ -164,6 +164,9 @@ class Departamento2IntegracionTest {
       }
     }
     assertThat(cerradaParaOperacion.get("seguimiento").asText()).isEqualTo("Cerrado");
+    MvcResult reabierta = guardar(depto3, id, "Intento de reabrir", null, "En gestión");
+    assertThat(reabierta.getResponse().getStatus()).isEqualTo(400);
+    assertThat(reabierta.getResponse().getContentAsString()).contains(Mensajes.SEGUIMIENTO_CERRADO);
 
     assertThat(mockMvc.perform(get("/api/departamento3/solicitudes/" + id + "/evidencia").session(depto3))
         .andReturn().getResponse().getStatus()).isEqualTo(200);

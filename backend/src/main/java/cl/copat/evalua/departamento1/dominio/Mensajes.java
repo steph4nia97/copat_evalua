@@ -38,6 +38,7 @@ public final class Mensajes {
       "Solo puede enviar a revisión una solicitud que ya fue enviada a cliente.";
   public static final String DESCRIPCION_REVISION = "Escriba una nota de seguimiento.";
   public static final String SEGUIMIENTO = "Elija un estado de seguimiento.";
+  public static final String SEGUIMIENTO_CERRADO = "Este caso está cerrado y no se puede volver a abrir.";
   public static final String DESCRIPCION_REVISION_LARGA = "La descripción admite como máximo 500 caracteres.";
   public static final String EVIDENCIA = "La evidencia debe ser un PDF o una imagen PNG o JPG de hasta 8 MB.";
   public static final String ARCHIVO_GRANDE = "El archivo supera el tamaño permitido de 8 MB.";

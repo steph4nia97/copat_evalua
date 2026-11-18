@@ -227,62 +227,68 @@ function Tarjeta({ item }: { item: Revision }) {
         <p className="mt-3 text-xs text-muted">{item.escala}</p>
       </section>
 
-      <label htmlFor={`estado-${item.id}`} className="mt-4 block text-sm font-semibold">
-        Estado del seguimiento
-      </label>
-      <select
-        id={`estado-${item.id}`}
-        value={estado}
-        onChange={(evento) => setEstado(evento.target.value)}
-        className="mt-1 rounded-md border border-line bg-card px-3 py-2"
-      >
-        {SEGUIMIENTO.map((opcion) => (
-          <option key={opcion} value={opcion}>
-            {opcion}
-          </option>
-        ))}
-      </select>
-      <p className="mt-1 text-xs text-muted">
-        Departamento 1 ve Respondida cuando llega la encuesta. Si el seguimiento queda Cerrada, lo ve Cerrado.
-      </p>
-      <label htmlFor={`nota-${item.id}`} className="mt-3 block text-sm font-semibold">
-        Nueva nota
-      </label>
-      <textarea
-        id={`nota-${item.id}`}
-        value={nota}
-        maxLength={500}
-        rows={4}
-        onChange={(evento) => setNota(evento.target.value)}
-        className="mt-1 w-full rounded-md border border-line px-3 py-2 outline-none ring-copper focus:ring-2"
-      />
-      <p className="mt-1 text-xs text-muted">{nota.trim().length} / 500</p>
+      {item.seguimiento === "Cerrada" ? (
+        <p className="mt-4 text-sm text-muted">Este caso está cerrado y no se puede volver a abrir.</p>
+      ) : (
+        <>
+          <label htmlFor={`estado-${item.id}`} className="mt-4 block text-sm font-semibold">
+            Estado del seguimiento
+          </label>
+          <select
+            id={`estado-${item.id}`}
+            value={estado}
+            onChange={(evento) => setEstado(evento.target.value)}
+            className="mt-1 rounded-md border border-line bg-card px-3 py-2"
+          >
+            {SEGUIMIENTO.map((opcion) => (
+              <option key={opcion} value={opcion}>
+                {opcion}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-muted">
+            Departamento 1 ve Respondida cuando llega la encuesta. Si el seguimiento queda Cerrada, lo ve Cerrado.
+          </p>
+          <label htmlFor={`nota-${item.id}`} className="mt-3 block text-sm font-semibold">
+            Nueva nota
+          </label>
+          <textarea
+            id={`nota-${item.id}`}
+            value={nota}
+            maxLength={500}
+            rows={4}
+            onChange={(evento) => setNota(evento.target.value)}
+            className="mt-1 w-full rounded-md border border-line px-3 py-2 outline-none ring-copper focus:ring-2"
+          />
+          <p className="mt-1 text-xs text-muted">{nota.trim().length} / 500</p>
 
-      <label htmlFor={`evidencia-${item.id}`} className="mt-3 block text-sm font-semibold">
-        Evidencia adicional (opcional)
-      </label>
-      <input
-        id={`evidencia-${item.id}`}
-        type="file"
-        accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"
-        className="mt-1 block text-sm"
-        onChange={(evento) => setArchivo(evento.target.files?.[0] ?? null)}
-      />
+          <label htmlFor={`evidencia-${item.id}`} className="mt-3 block text-sm font-semibold">
+            Evidencia adicional (opcional)
+          </label>
+          <input
+            id={`evidencia-${item.id}`}
+            type="file"
+            accept="application/pdf,.pdf,image/png,image/jpeg,.png,.jpg,.jpeg"
+            className="mt-1 block text-sm"
+            onChange={(evento) => setArchivo(evento.target.files?.[0] ?? null)}
+          />
 
-      {error && (
-        <p className="mt-3 text-sm text-copper-dark" role="alert">
-          {error}
-        </p>
+          {error && (
+            <p className="mt-3 text-sm text-copper-dark" role="alert">
+              {error}
+            </p>
+          )}
+          {aviso && <p className="mt-3 text-sm text-pine">{aviso}</p>}
+          <button
+            type="button"
+            disabled={enviando}
+            className="mt-4 rounded-md bg-pine px-4 py-2 font-semibold text-white disabled:opacity-60"
+            onClick={() => void guardar()}
+          >
+            Agregar nota
+          </button>
+        </>
       )}
-      {aviso && <p className="mt-3 text-sm text-pine">{aviso}</p>}
-      <button
-        type="button"
-        disabled={enviando}
-        className="mt-4 rounded-md bg-pine px-4 py-2 font-semibold text-white disabled:opacity-60"
-        onClick={() => void guardar()}
-      >
-        Agregar nota
-      </button>
     </article>
   );
 }
@@ -411,14 +417,9 @@ export function Departamento3Page() {
         </div>
 
         {conjunto && (
-          <section className="mt-4 rounded-xl border border-pine/20 bg-pine-soft p-4" aria-label="Resultado del filtro">
-            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-pine">Resultado del filtro</p>
-            <p className="mt-1 font-serif text-3xl text-pine">{conjunto.desempeno}</p>
-            <p className="text-sm">
-              {conjunto.cantidad} {conjunto.cantidad === 1 ? "encuesta" : "encuestas"} · promedio{" "}
-              {notas(conjunto.promedio)} de 5
-            </p>
-          </section>
+          <p className="mt-4 text-sm text-muted" aria-label="Resultado del filtro">
+            {conjunto.cantidad} {conjunto.cantidad === 1 ? "encuesta" : "encuestas"} en el filtro · promedio {notas(conjunto.promedio)} · {conjunto.desempeno}
+          </p>
         )}
 
         <div className="mt-5 flex flex-col gap-4">
