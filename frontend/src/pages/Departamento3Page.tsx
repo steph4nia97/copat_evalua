@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, descargar, ErrorApi } from "../api/client";
 import { useSesion } from "../auth/sesion";
+import { CampoFecha } from "../components/CampoFecha";
 import { Encabezado } from "../components/Encabezado";
 
 type Movimiento = {
@@ -27,6 +28,14 @@ type NotaSeguimiento = {
 };
 
 const SEGUIMIENTO = ["Recibida", "En análisis", "En gestión", "Cerrada"];
+
+type Accion = {
+  id: number;
+  descripcion: string;
+  responsable: string;
+  plazo: string;
+  estado: string;
+};
 
 type Revision = {
   id: number;
@@ -56,6 +65,8 @@ type Revision = {
   tienePdf: boolean;
   seguimiento: string | null;
   notasSeguimiento: NotaSeguimiento[];
+  conclusiones: string | null;
+  acciones: Accion[];
 };
 
 const ESTADOS_OBRA = ["Obra finalizada", "Obra en construcción"];
@@ -75,6 +86,134 @@ function clasificar(promedio: number) {
 function promedioConjunto(valores: number[]) {
   const centavos = valores.reduce((suma, valor) => suma + Math.round(valor * 100), 0);
   return Math.round(centavos / valores.length) / 100;
+}
+
+function textoError(err: unknown, respaldo: string) {
+  if (!(err instanceof ErrorApi)) {
+    return respaldo;
+  }
+  return Object.values(err.campos)[0] || err.message;
+}
+
+function ApartadoEvaluacion({ item }: { item: Revision }) {
+  const queryClient = useQueryClient();
+  const [conclusiones, setConclusiones] = useState(item.conclusiones ?? "");
+  const [accion, setAccion] = useState("");
+  const [responsable, setResponsable] = useState("");
+  const [plazo, setPlazo] = useState("");
+  const [error, setError] = useState("");
+  const [aviso, setAviso] = useState("");
+  const [guardando, setGuardando] = useState(false);
+  const campo = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+
+  useEffect(() => {
+    setConclusiones(item.conclusiones ?? "");
+  }, [item.conclusiones]);
+
+  async function guardarConclusiones() {
+    if (conclusiones.trim().length > 2000) {
+      setError("Las conclusiones y recomendaciones admiten como máximo 2000 caracteres.");
+      return;
+    }
+    setGuardando(true);
+    setError("");
+    setAviso("");
+    try {
+      await api(`/api/departamento3/solicitudes/${item.id}/conclusiones`, {
+        method: "PUT",
+        body: JSON.stringify({ texto: conclusiones.trim() }),
+      });
+      setAviso("Conclusiones guardadas.");
+      await queryClient.invalidateQueries({ queryKey: ["d3-solicitudes"] });
+    } catch (err) {
+      setError(textoError(err, "No se pudieron guardar las conclusiones."));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  async function agregarAccion() {
+    setGuardando(true);
+    setError("");
+    setAviso("");
+    try {
+      await api(`/api/departamento3/solicitudes/${item.id}/acciones`, {
+        method: "POST",
+        body: JSON.stringify({ descripcion: accion.trim(), responsable: responsable.trim(), plazo }),
+      });
+      setAccion("");
+      setResponsable("");
+      setPlazo("");
+      setAviso("Acción agregada.");
+      await queryClient.invalidateQueries({ queryKey: ["d3-solicitudes"] });
+    } catch (err) {
+      setError(textoError(err, "No se pudo agregar la acción."));
+    } finally {
+      setGuardando(false);
+    }
+  }
+
+  return (
+    <section className="mt-4 rounded-xl border border-line bg-paper p-4">
+      <h3 className="text-sm font-semibold">Conclusiones y recomendaciones</h3>
+      <textarea
+        value={conclusiones}
+        maxLength={2000}
+        rows={4}
+        onChange={(evento) => setConclusiones(evento.target.value)}
+        className="mt-2 w-full rounded-md border border-line bg-white px-3 py-2 text-sm"
+      />
+      <p className="mt-1 text-xs text-muted">{conclusiones.trim().length} / 2000</p>
+      <button
+        type="button"
+        disabled={guardando}
+        className="mt-2 rounded-md bg-pine px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
+        onClick={() => void guardarConclusiones()}
+      >
+        Guardar conclusiones
+      </button>
+
+      <h3 className="mt-5 text-sm font-semibold">Acciones propuestas</h3>
+      <p className="mt-1 text-sm text-muted">Queda en gestión hasta que el seguimiento de la encuesta se cierre.</p>
+      {item.acciones.length === 0 && <p className="mt-2 text-sm text-muted">Aún no hay acciones.</p>}
+      <ul className="mt-2 space-y-2">
+        {item.acciones.map((propuesta) => (
+          <li key={propuesta.id} className="rounded-md border border-line bg-card px-3 py-2 text-sm">
+            <p>{propuesta.descripcion}</p>
+            <p className="mt-1 text-muted">
+              {propuesta.responsable} · plazo {propuesta.plazo} · {propuesta.estado}
+            </p>
+          </li>
+        ))}
+      </ul>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="text-sm font-semibold sm:col-span-2">
+          Acción
+          <input className={campo} value={accion} maxLength={400} onChange={(evento) => setAccion(evento.target.value)} />
+        </label>
+        <label className="text-sm font-semibold">
+          Responsable
+          <input className={campo} value={responsable} maxLength={80} onChange={(evento) => setResponsable(evento.target.value)} />
+        </label>
+        <CampoFecha id={`plazo-${item.id}`} label="Plazo" value={plazo} onChange={setPlazo} onBlur={() => undefined} />
+      </div>
+      {error && (
+        <p className="mt-3 text-sm text-copper-dark" role="alert">
+          {error}
+        </p>
+      )}
+      {aviso && <p className="mt-3 text-sm text-pine">{aviso}</p>}
+      <button
+        type="button"
+        disabled={guardando}
+        className="mt-3 rounded-md border border-line bg-card px-3 py-2 text-sm font-semibold disabled:opacity-60"
+        onClick={() => void agregarAccion()}
+      >
+        Agregar acción
+      </button>
+    </section>
+  );
 }
 
 function Tarjeta({ item }: { item: Revision }) {
@@ -226,6 +365,8 @@ function Tarjeta({ item }: { item: Revision }) {
         </dl>
         <p className="mt-3 text-xs text-muted">{item.escala}</p>
       </section>
+
+      <ApartadoEvaluacion item={item} />
 
       {item.seguimiento === "Cerrada" ? (
         <p className="mt-4 text-sm text-muted">Este caso está cerrado y no se puede volver a abrir.</p>

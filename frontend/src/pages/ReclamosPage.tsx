@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { api, ErrorApi } from "../api/client";
+import { api, descargar, ErrorApi } from "../api/client";
 import { useSesion } from "../auth/sesion";
 import { CampoFecha } from "../components/CampoFecha";
 import { Encabezado } from "../components/Encabezado";
 import { compararFechas, fechaValida } from "../domain/reglas";
+import { InformeGestion } from "./InformeGestion";
 
 type Reclamo = {
   id: number;
@@ -44,29 +45,18 @@ const TIPOS = [
 ];
 
 const SIN_SEDE = "Sin sede";
+
+function estadoAutomatico(observaciones: string, fechaCierre: string, horaCierre: string, solucion: string) {
+  if (fechaCierre.trim() || horaCierre.trim() || solucion.trim()) return "Cerrado";
+  if (observaciones.trim()) return "En gestión";
+  return "Recibido";
+}
 const campo = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
 
 function instante(reclamo: Reclamo) {
   const [dia, mes, anio] = reclamo.fecha.split("/").map(Number);
   const [hora, minuto] = reclamo.hora.split(":").map(Number);
   return new Date(anio, (mes || 1) - 1, dia || 1, hora || 0, minuto || 0).getTime();
-}
-
-function mesDe(fecha: string) {
-  return fecha.slice(3);
-}
-
-function porcentaje(parte: number, total: number) {
-  if (total === 0) return 0;
-  return Math.round((parte / total) * 100);
-}
-
-function diasEntre(inicio: string, fin: string) {
-  if (!fechaValida(inicio) || !fechaValida(fin)) return null;
-  const [diaInicio, mesInicio, anioInicio] = inicio.split("/").map(Number);
-  const [diaFin, mesFin, anioFin] = fin.split("/").map(Number);
-  const milisegundos = new Date(anioFin, mesFin - 1, diaFin).getTime() - new Date(anioInicio, mesInicio - 1, diaInicio).getTime();
-  return Math.round(milisegundos / 86400000);
 }
 
 function dentroDelRango(fecha: string, desde: string, hasta: string) {
@@ -84,6 +74,7 @@ export function ReclamosPage() {
   const [hasta, setHasta] = useState("");
   const [recientes, setRecientes] = useState(true);
   const [abierto, setAbierto] = useState<number | null>(null);
+  const [vista, setVista] = useState<"seguimiento" | "gestion">("seguimiento");
   const enlace = `${window.location.origin}/reclamo`;
   const reclamos = useQuery({
     queryKey: ["reclamos"],
@@ -130,9 +121,29 @@ export function ReclamosPage() {
     <div className="min-h-screen">
       <Encabezado />
       <main className="mx-auto max-w-6xl px-4 py-6">
-        <h1 className="font-serif text-3xl">Seguimiento de reclamos</h1>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={vista === "seguimiento"}
+            className={vista === "seguimiento" ? "rounded-md bg-pine px-3 py-2 text-sm font-semibold text-white" : "rounded-md border border-line bg-card px-3 py-2 text-sm font-semibold"}
+            onClick={() => setVista("seguimiento")}
+          >
+            Seguimiento
+          </button>
+          <button
+            type="button"
+            aria-pressed={vista === "gestion"}
+            className={vista === "gestion" ? "rounded-md bg-pine px-3 py-2 text-sm font-semibold text-white" : "rounded-md border border-line bg-card px-3 py-2 text-sm font-semibold"}
+            onClick={() => setVista("gestion")}
+          >
+            Informe de gestión
+          </button>
+        </div>
+        {vista === "seguimiento" && (
+          <>
+        <h1 className="mt-4 font-serif text-3xl">Seguimiento de reclamos</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">
-          D-SIG-09-02. El listado se acota por tipo, sede y fecha de recepción. Los porcentajes de abajo corresponden a ese corte.
+          Planilla D-SIG-09-02. Los datos los ingresa el cliente. El estado cambia solo: Recibido al llegar, En gestión con observaciones internas, y Cerrado al completar el cierre.
         </p>
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <input readOnly value={enlace} aria-label="Enlace de reclamos" className="w-full max-w-md rounded-md border border-line bg-card px-3 py-2 text-sm" onFocus={(evento) => evento.currentTarget.select()} />
@@ -206,7 +217,7 @@ export function ReclamosPage() {
               aria-pressed={recientes}
               onClick={() => setRecientes((actual) => !actual)}
             >
-              Fecha recibida · {recientes ? "más recientes" : "más antiguas"}
+              Hora de inicio · {recientes ? "más recientes" : "más antiguas"}
             </button>
           </div>
           {datos.length === 0 && <p className="text-sm text-muted">Todavía no llegan reclamos.</p>}
@@ -218,11 +229,13 @@ export function ReclamosPage() {
               <table className="w-full min-w-[720px] text-left text-sm">
                 <thead className="border-b border-line text-xs uppercase tracking-wide text-muted">
                   <tr>
-                    <th className="px-3 py-2 font-semibold" aria-sort={recientes ? "descending" : "ascending"}>Fecha recibida</th>
+                    <th className="px-3 py-2 font-semibold">Id</th>
+                    <th className="px-3 py-2 font-semibold" aria-sort={recientes ? "descending" : "ascending"}>Hora de inicio</th>
                     <th className="px-3 py-2 font-semibold">Empresa</th>
-                    <th className="px-3 py-2 font-semibold">Tipo</th>
-                    <th className="px-3 py-2 font-semibold">Sede responsable</th>
-                    <th className="px-3 py-2 font-semibold">Estado</th>
+                    <th className="px-3 py-2 font-semibold">Tipo de reclamo</th>
+                    <th className="px-3 py-2 font-semibold">Estado del reclamo</th>
+                    <th className="px-3 py-2 font-semibold">Persona responsable</th>
+                    <th className="px-3 py-2 font-semibold">Fecha de gestión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -232,6 +245,7 @@ export function ReclamosPage() {
                       className="cursor-pointer border-t border-line hover:bg-paper"
                       onClick={() => setAbierto(reclamo.id)}
                     >
+                      <td className="px-3 py-3">{reclamo.id}</td>
                       <td className="px-3 py-3">
                         <button type="button" className="text-left font-semibold" onClick={() => setAbierto(reclamo.id)}>
                           {reclamo.fecha} {reclamo.hora}
@@ -242,10 +256,11 @@ export function ReclamosPage() {
                         <p className="text-xs text-muted">{reclamo.obra}</p>
                       </td>
                       <td className="px-3 py-3">{reclamo.tipo}</td>
-                      <td className="px-3 py-3">{reclamo.sede ?? "Sin sede"}</td>
                       <td className="px-3 py-3">
                         <span className="rounded-full bg-paper px-2 py-1 text-xs font-semibold">{reclamo.estado}</span>
                       </td>
+                      <td className="px-3 py-3">{reclamo.responsable ?? "—"}</td>
+                      <td className="px-3 py-3">{reclamo.fechaGestion ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -254,109 +269,12 @@ export function ReclamosPage() {
           )}
         </section>
 
-        <Metricas reclamos={visibles} totalGeneral={datos.length} sedes={sedes.data ?? []} />
+          </>
+        )}
+        {vista === "gestion" && <InformeGestion />}
       </main>
       {seleccionado && <Detalle reclamo={seleccionado} onCerrar={() => setAbierto(null)} />}
     </div>
-  );
-}
-
-function Metricas({ reclamos, totalGeneral, sedes }: { reclamos: Reclamo[]; totalGeneral: number; sedes: string[] }) {
-  const total = reclamos.length;
-  const porTipo = TIPOS.map((nombre) => ({ nombre, cantidad: reclamos.filter((reclamo) => reclamo.tipo === nombre).length }));
-  const nombresSede = [...sedes, SIN_SEDE];
-  const porSede = nombresSede.map((nombre) => ({
-    nombre,
-    cantidad: reclamos.filter((reclamo) => (nombre === SIN_SEDE ? !reclamo.sede : reclamo.sede === nombre)).length,
-  })).filter((item) => item.cantidad > 0);
-  const porEstado = ESTADOS.map((nombre) => ({ nombre, cantidad: reclamos.filter((reclamo) => reclamo.estado === nombre).length }));
-  const lider = [...porTipo].sort((a, b) => b.cantidad - a.cantidad)[0];
-  const cerrados = reclamos.filter((reclamo) => reclamo.estado === "Cerrado" && reclamo.fechaCierre);
-  const dias = cerrados
-    .map((reclamo) => diasEntre(reclamo.fecha, reclamo.fechaCierre ?? ""))
-    .filter((valor): valor is number => valor != null);
-  const promedioDias = dias.length === 0 ? null : Math.round(dias.reduce((suma, valor) => suma + valor, 0) / dias.length);
-  const meses = new Map<string, number>();
-  for (const reclamo of reclamos) {
-    const clave = mesDe(reclamo.fecha);
-    meses.set(clave, (meses.get(clave) ?? 0) + 1);
-  }
-  const serie = [...meses.entries()].sort((a, b) => {
-    const [mesA, anioA] = a[0].split("/").map(Number);
-    const [mesB, anioB] = b[0].split("/").map(Number);
-    return anioA - anioB || mesA - mesB;
-  });
-  const maximoMes = Math.max(...serie.map((item) => item[1]), 1);
-  const lectura = total === 0
-    ? "No hay reclamos en este corte."
-    : `${lider.nombre} es el ${porcentaje(lider.cantidad, total)}% del corte. ${porcentaje(porEstado.find((item) => item.nombre === "Cerrado")?.cantidad ?? 0, total)}% está cerrado.`;
-
-  return (
-    <section className="mt-8" aria-label="Porcentajes del corte">
-      <h2 className="font-serif text-2xl">Porcentajes</h2>
-      <p className="mt-1 text-sm text-muted">{lectura} {totalGeneral > 0 ? `El corte representa el ${porcentaje(total, totalGeneral)}% de todos los reclamos.` : ""}</p>
-      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Resumen etiqueta="En el corte" valor={String(total)} detalle={`${porcentaje(total, totalGeneral)}% del total`} />
-        {porEstado.map((item) => (
-          <Resumen key={item.nombre} etiqueta={item.nombre} valor={`${porcentaje(item.cantidad, total)}%`} detalle={`${item.cantidad} ${item.cantidad === 1 ? "caso" : "casos"}`} />
-        ))}
-        <Resumen etiqueta="Días al cierre" valor={promedioDias == null ? "—" : String(promedioDias)} detalle={dias.length ? `Promedio de ${dias.length} cerrados` : "Sin cierres en el corte"} />
-        <Resumen etiqueta="Sin sede" valor={`${porcentaje(porSede.find((item) => item.nombre === SIN_SEDE)?.cantidad ?? 0, total)}%`} detalle={`${porSede.find((item) => item.nombre === SIN_SEDE)?.cantidad ?? 0} ${(porSede.find((item) => item.nombre === SIN_SEDE)?.cantidad ?? 0) === 1 ? "caso" : "casos"}`} />
-      </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
-        <Distribucion titulo="Por tipo de reclamo" items={porTipo} total={total} />
-        <Distribucion titulo="Por sede responsable" items={porSede.length ? porSede : [{ nombre: SIN_SEDE, cantidad: 0 }]} total={total} />
-      </div>
-      {serie.length > 0 && (
-        <div className="mt-4 rounded-xl border border-line bg-card p-4">
-          <h3 className="font-semibold">Llegadas por mes</h3>
-          <ul className="mt-3 flex items-end gap-3 overflow-x-auto">
-            {serie.map(([mes, cantidad]) => (
-              <li key={mes} className="flex w-16 shrink-0 flex-col items-center gap-1">
-                <span className="text-xs font-semibold">{cantidad}</span>
-                <span className="text-[11px] text-muted">{porcentaje(cantidad, total)}%</span>
-                <span className="flex h-20 w-full items-end rounded-md bg-paper">
-                  <span className="block w-full rounded-md bg-copper" style={{ height: `${Math.max(8, (cantidad / maximoMes) * 100)}%` }} />
-                </span>
-                <span className="text-center text-[11px] text-muted">{mes}</span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function Resumen({ etiqueta, valor, detalle }: { etiqueta: string; valor: string; detalle: string }) {
-  return (
-    <article className="rounded-xl border border-line bg-card p-4">
-      <p className="text-xs uppercase tracking-wide text-muted">{etiqueta}</p>
-      <p className="font-serif text-3xl">{valor}</p>
-      <p className="text-sm text-muted">{detalle}</p>
-    </article>
-  );
-}
-
-function Distribucion({ titulo, items, total }: { titulo: string; items: { nombre: string; cantidad: number }[]; total: number }) {
-  const maximo = Math.max(...items.map((item) => item.cantidad), 1);
-  return (
-    <article className="rounded-xl border border-line bg-card p-4">
-      <h3 className="font-semibold">{titulo}</h3>
-      <ul className="mt-3 space-y-3">
-        {items.map((item) => (
-          <li key={item.nombre}>
-            <div className="flex items-baseline justify-between gap-3 text-sm">
-              <span className="font-semibold">{item.nombre}</span>
-              <span className="text-muted">{item.cantidad} · {porcentaje(item.cantidad, total)}%</span>
-            </div>
-            <div className="mt-1 h-2 overflow-hidden rounded-full bg-paper">
-              <div className="h-full rounded-full bg-pine" style={{ width: `${(item.cantidad / maximo) * 100}%` }} />
-            </div>
-          </li>
-        ))}
-      </ul>
-    </article>
   );
 }
 
@@ -382,35 +300,39 @@ function Detalle({ reclamo, onCerrar }: { reclamo: Reclamo; onCerrar: () => void
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Reclamo {reclamo.id}</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted">Planilla D-SIG-09-02 · Reclamo {reclamo.id}</p>
             <h2 id="titulo-reclamo" className="font-serif text-2xl">{reclamo.empresa}</h2>
+            <p className="mt-1 text-sm text-muted">Los datos ingresados no se vuelven a escribir. El seguimiento se completa abajo.</p>
           </div>
           <button type="button" className="rounded-md border border-line bg-card px-3 py-1 text-sm" onClick={onCerrar}>
             Cerrar
           </button>
         </div>
-        <dl className="mt-4 grid gap-2 text-sm sm:grid-cols-2">
-          <Dato etiqueta="Fecha recibida" valor={`${reclamo.fecha} ${reclamo.hora}`} />
-          <Dato etiqueta="Estado" valor={reclamo.estado} />
-          <Dato etiqueta="Sede responsable" valor={reclamo.sede ?? "Sin sede"} />
-          <Dato etiqueta="Tipo de reclamo" valor={reclamo.tipo} />
-          <Dato etiqueta="Nombre" valor={reclamo.nombre} />
-          <Dato etiqueta="Correo electrónico" valor={reclamo.correo} />
-          <Dato etiqueta="Teléfono de contacto" valor={reclamo.telefono} />
-          <Dato etiqueta="Nombre de la obra" valor={reclamo.obra} />
-          <Dato etiqueta="Ubicación" valor={reclamo.ubicacion} />
-          <Dato etiqueta="Fecha del servicio" valor={reclamo.fechaServicio} />
-          <Dato etiqueta="Guía de despacho / orden" valor={reclamo.guiaDespacho ?? "—"} />
-          <Dato etiqueta="Hora de finalización" valor={reclamo.horaCierre ?? "—"} />
-          <Dato etiqueta="¿Cómo prefiere que lo contactemos?" valor={reclamo.preferenciaContacto} />
-          <Dato etiqueta="Horario preferido" valor={reclamo.horario ?? "—"} />
-          <div className="sm:col-span-2">
-            <Dato etiqueta="Descripción del reclamo" valor={reclamo.descripcion} />
-          </div>
-          <div className="sm:col-span-2">
-            <Dato etiqueta="Comentarios adicionales" valor={reclamo.comentarios ?? "—"} />
-          </div>
-        </dl>
+        <section className="mt-4">
+          <h3 className="text-sm font-semibold">Datos ingresados</h3>
+          <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+            <Dato etiqueta="Id" valor={String(reclamo.id)} />
+            <Dato etiqueta="Hora de inicio" valor={`${reclamo.fecha} ${reclamo.hora}`} />
+            <Dato etiqueta="Hora de finalización" valor={reclamo.horaCierre ?? "—"} />
+            <Dato etiqueta="Correo electrónico" valor={reclamo.correo} />
+            <Dato etiqueta="Nombre" valor={reclamo.nombre} />
+            <Dato etiqueta="Empresa / razón social" valor={reclamo.empresa} />
+            <Dato etiqueta="Teléfono de contacto" valor={reclamo.telefono} />
+            <Dato etiqueta="Nombre de la obra" valor={reclamo.obra} />
+            <Dato etiqueta="Ubicación (dirección, comuna, ciudad)" valor={reclamo.ubicacion} />
+            <Dato etiqueta="Fecha del servicio" valor={reclamo.fechaServicio} />
+            <Dato etiqueta="Guía de despacho / orden (si aplica)" valor={reclamo.guiaDespacho ?? "—"} />
+            <Dato etiqueta="Tipo de reclamo" valor={reclamo.tipo} />
+            <Dato etiqueta="¿Cómo prefiere que lo contactemos?" valor={reclamo.preferenciaContacto} />
+            <Dato etiqueta="Horario preferido para contacto" valor={reclamo.horario ?? "—"} />
+            <div className="sm:col-span-2">
+              <Dato etiqueta="Descripción del reclamo" valor={reclamo.descripcion} />
+            </div>
+            <div className="sm:col-span-2">
+              <Dato etiqueta="Comentarios adicionales" valor={reclamo.comentarios ?? "—"} />
+            </div>
+          </dl>
+        </section>
         <Formulario reclamo={reclamo} />
       </div>
     </div>
@@ -435,7 +357,6 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
     reclamo.horaCierre,
     reclamo.solucion,
   ].join("|");
-  const [estado, setEstado] = useState(reclamo.estado);
   const [sede, setSede] = useState(reclamo.sede ?? "");
   const [area, setArea] = useState(reclamo.area ?? "");
   const [responsable, setResponsable] = useState(reclamo.responsable ?? usuario?.nombre ?? "");
@@ -448,10 +369,10 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const gestiona = estado === "En gestión" || estado === "Cerrado";
+  const estado = estadoAutomatico(observaciones, fechaCierre, horaCierre, solucion);
+  const gestiona = estado !== "Recibido";
 
   useEffect(() => {
-    setEstado(reclamo.estado);
     setSede(reclamo.sede ?? "");
     setArea(reclamo.area ?? "");
     setResponsable(reclamo.responsable ?? usuario?.nombre ?? "");
@@ -461,6 +382,18 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
     setHoraCierre(reclamo.horaCierre ?? "");
     setSolucion(reclamo.solucion ?? "");
   }, [firma, reclamo, usuario?.nombre]);
+
+  async function bajarInforme() {
+    setError("");
+    try {
+      await descargar(
+        `/api/departamento3/reclamos/${reclamo.id}/informe`,
+        `D-SIG-09-02-reclamo-${reclamo.id}.pdf`,
+      );
+    } catch (err) {
+      setError(err instanceof ErrorApi ? err.message : "No se pudo descargar el informe.");
+    }
+  }
 
   async function guardar() {
     setGuardando(true);
@@ -498,22 +431,24 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
 
   return (
     <form
-      className="mt-4 grid gap-3 border-t border-line pt-4 sm:grid-cols-2"
+      className="mt-5 grid gap-3 border-t border-line pt-4 sm:grid-cols-2"
       onSubmit={(evento) => {
         evento.preventDefault();
         void guardar();
       }}
     >
+      <h3 className="text-sm font-semibold sm:col-span-2">Seguimiento</h3>
+      <p className="text-sm sm:col-span-2">
+        <span className="font-semibold">Estado del reclamo</span>
+        <span className="mt-1 block">{estado}</span>
+        <span className="mt-1 block text-xs font-normal text-muted">
+          Al recibirlo queda Recibido. Si escribes observaciones internas, pasa a En gestión. Si completas la fecha de cierre, la hora de finalización o la solución, el caso se cierra.
+        </span>
+      </p>
       <label className="text-sm font-semibold">
-        Estado del reclamo
-        <select className={campo} value={estado} onChange={(evento) => setEstado(evento.target.value)}>
-          {ESTADOS.map((opcion) => (
-            <option key={opcion} value={opcion}>
-              {opcion}
-            </option>
-          ))}
-        </select>
-        {campos.estado && <Aviso texto={campos.estado} />}
+        Área responsable{gestiona ? " *" : ""}
+        <input className={campo} value={area} maxLength={80} onChange={(evento) => setArea(evento.target.value)} />
+        {campos.area && <Aviso texto={campos.area} />}
       </label>
       <label className="text-sm font-semibold">
         Sede responsable{gestiona ? " *" : ""}
@@ -528,17 +463,12 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
         {campos.sede && <Aviso texto={campos.sede} />}
       </label>
       <label className="text-sm font-semibold">
-        Área responsable
-        <input className={campo} value={area} maxLength={80} onChange={(evento) => setArea(evento.target.value)} />
-        {campos.area && <Aviso texto={campos.area} />}
-      </label>
-      <label className="text-sm font-semibold">
-        Persona responsable del reclamo
+        Persona responsable del reclamo{gestiona ? " *" : ""}
         <input className={campo} value={responsable} maxLength={80} onChange={(evento) => setResponsable(evento.target.value)} />
         {campos.responsable && <Aviso texto={campos.responsable} />}
       </label>
       <label className="text-sm font-semibold">
-        Fecha de gestión
+        Fecha de gestión{gestiona ? " *" : ""}
         <input className={campo} value={fechaGestion} placeholder="dd/mm/aaaa" onChange={(evento) => setFechaGestion(evento.target.value)} />
         {campos.fechaGestion && <Aviso texto={campos.fechaGestion} />}
       </label>
@@ -547,35 +477,39 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
         <textarea className={campo} rows={2} maxLength={500} value={observaciones} onChange={(evento) => setObservaciones(evento.target.value)} />
         {campos.observaciones && <Aviso texto={campos.observaciones} />}
       </label>
-      {estado === "Cerrado" && (
-        <>
-          <label className="text-sm font-semibold">
-            Fecha de cierre
-            <input className={campo} value={fechaCierre} placeholder="dd/mm/aaaa" onChange={(evento) => setFechaCierre(evento.target.value)} />
-            {campos.fechaCierre && <Aviso texto={campos.fechaCierre} />}
-          </label>
-          <label className="text-sm font-semibold">
-            Hora de finalización
-            <input className={campo} value={horaCierre} placeholder="hh:mm" onChange={(evento) => setHoraCierre(evento.target.value)} />
-            {campos.horaCierre && <Aviso texto={campos.horaCierre} />}
-          </label>
-          <label className="text-sm font-semibold sm:col-span-2">
-            Solución
-            <textarea className={campo} rows={3} maxLength={1000} value={solucion} onChange={(evento) => setSolucion(evento.target.value)} />
-            {campos.solucion && <Aviso texto={campos.solucion} />}
-          </label>
-        </>
-      )}
+      <label className="text-sm font-semibold">
+        Fecha de cierre
+        <input className={campo} value={fechaCierre} placeholder="dd/mm/aaaa" onChange={(evento) => setFechaCierre(evento.target.value)} />
+        {campos.fechaCierre && <Aviso texto={campos.fechaCierre} />}
+      </label>
+      <label className="text-sm font-semibold">
+        Hora de finalización
+        <input className={campo} value={horaCierre} placeholder="hh:mm" onChange={(evento) => setHoraCierre(evento.target.value)} />
+        {campos.horaCierre && <Aviso texto={campos.horaCierre} />}
+      </label>
+      <label className="text-sm font-semibold sm:col-span-2">
+        Solución{estado === "Cerrado" ? " *" : ""}
+        <textarea className={campo} rows={3} maxLength={1000} value={solucion} onChange={(evento) => setSolucion(evento.target.value)} />
+        {campos.solucion && <Aviso texto={campos.solucion} />}
+      </label>
       {error && (
         <p className="text-sm text-copper-dark sm:col-span-2" role="alert">
           {error}
         </p>
       )}
       {aviso && <p className="text-sm text-pine sm:col-span-2">{aviso}</p>}
-      <div className="sm:col-span-2">
+      {reclamo.estado !== "Cerrado" && estado === "Cerrado" && (
+        <p className="text-sm text-muted sm:col-span-2">Guarde el cierre para descargar el informe.</p>
+      )}
+      <div className="flex flex-wrap gap-2 sm:col-span-2">
         <button type="submit" disabled={guardando} className="rounded-md bg-pine px-4 py-2 text-sm font-semibold text-white disabled:opacity-60">
           {guardando ? "Guardando…" : "Guardar seguimiento"}
         </button>
+        {reclamo.estado === "Cerrado" && (
+          <button type="button" className="rounded-md border border-line bg-card px-4 py-2 text-sm font-semibold" onClick={() => void bajarInforme()}>
+            Descargar informe
+          </button>
+        )}
       </div>
     </form>
   );

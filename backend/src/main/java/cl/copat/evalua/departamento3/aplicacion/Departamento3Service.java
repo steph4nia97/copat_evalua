@@ -21,11 +21,16 @@ import cl.copat.evalua.departamento2.persistencia.SolicitudEvaluacion;
 import cl.copat.evalua.departamento2.persistencia.SolicitudEvaluacionRepository;
 import cl.copat.evalua.departamento2.persistencia.SolicitudPdf;
 import cl.copat.evalua.departamento2.persistencia.SolicitudPdfRepository;
+import cl.copat.evalua.departamento3.api.AccionRequest;
+import cl.copat.evalua.departamento3.api.ConclusionesRequest;
 import cl.copat.evalua.departamento3.api.IndicadorResponse;
 import cl.copat.evalua.departamento3.api.RevisionResponse;
+import cl.copat.evalua.departamento3.api.RevisionResponse.AccionResponse;
 import cl.copat.evalua.departamento3.api.RevisionResponse.MovimientoResponse;
 import cl.copat.evalua.departamento3.api.RevisionResponse.NotaResponse;
 import cl.copat.evalua.departamento3.api.RevisionResponse.NotaSeguimientoResponse;
+import cl.copat.evalua.departamento3.persistencia.AccionEvaluacion;
+import cl.copat.evalua.departamento3.persistencia.AccionEvaluacionRepository;
 import cl.copat.evalua.departamento3.persistencia.EvidenciaRevision;
 import cl.copat.evalua.departamento3.persistencia.EvidenciaRevisionRepository;
 import cl.copat.evalua.departamento3.persistencia.RevisionDepartamento3;
@@ -67,6 +72,7 @@ public class Departamento3Service {
   private final UsuarioRepository usuarios;
   private final ActividadService actividad;
   private final SeguimientoNotaRepository notasSeguimiento;
+  private final AccionEvaluacionRepository acciones;
   private final Clock reloj;
 
   public Departamento3Service(
@@ -80,6 +86,7 @@ public class Departamento3Service {
       UsuarioRepository usuarios,
       ActividadService actividad,
       SeguimientoNotaRepository notasSeguimiento,
+      AccionEvaluacionRepository acciones,
       Clock reloj) {
     this.notificaciones = notificaciones;
     this.evaluaciones = evaluaciones;
@@ -91,6 +98,7 @@ public class Departamento3Service {
     this.usuarios = usuarios;
     this.actividad = actividad;
     this.notasSeguimiento = notasSeguimiento;
+    this.acciones = acciones;
     this.reloj = reloj;
   }
 
@@ -117,6 +125,10 @@ public class Departamento3Service {
         .collect(Collectors.groupingBy(log -> log.getSolicitud().getId(), Collectors.mapping(this::movimiento, Collectors.toList())));
     Map<Long, List<NotaSeguimientoResponse>> notasDeSeguimiento = notasSeguimiento.porSolicitudes(ids).stream()
         .collect(Collectors.groupingBy(nota -> nota.getSolicitud().getId(), Collectors.mapping(this::notaSeguimiento, Collectors.toList())));
+    Map<Long, List<AccionResponse>> accionesPorSolicitud = acciones.porSolicitudes(ids).stream()
+        .collect(Collectors.groupingBy(
+            accion -> accion.getSolicitud().getId(),
+            Collectors.mapping(accion -> accion(accion, cargadas.get(accion.getSolicitud().getId())), Collectors.toList())));
     return avisos.stream().map(aviso -> {
       Solicitud solicitud = aviso.getSolicitud();
       SolicitudEvaluacion evaluacion = porSolicitud.get(solicitud.getId());
@@ -155,7 +167,9 @@ public class Departamento3Service {
           conPdf.contains(solicitud.getId()),
           solicitud.getVecesRechazada() > 0,
           solicitud.getSeguimiento() == null ? Catalogo.SEGUIMIENTO_RECIBIDA : solicitud.getSeguimiento(),
-          notasDeSeguimiento.getOrDefault(solicitud.getId(), List.of()));
+          notasDeSeguimiento.getOrDefault(solicitud.getId(), List.of()),
+          solicitud.getConclusiones(),
+          accionesPorSolicitud.getOrDefault(solicitud.getId(), List.of()));
     }).toList();
   }
 
@@ -253,13 +267,107 @@ public class Departamento3Service {
         evidencias.saveAndFlush(actual);
       }
     }
+    if (Catalogo.SEGUIMIENTO_CERRADA.equals(estado)) {
+      for (AccionEvaluacion accion : acciones.porSolicitudes(List.of(id))) {
+        accion.cambiarEstado(AccionEvaluacion.CERRADO);
+      }
+    }
     if (cambio) {
       actividad.anotar(solicitud, usuario, Catalogo.seguimiento(estado), solicitud.getNombreEmpresa());
     }
+    return una(id, principal);
+  }
+
+  @Transactional
+  public RevisionResponse guardarConclusiones(long id, ConclusionesRequest request, UsuarioPrincipal principal) {
+    Solicitud solicitud = evaluacionAbierta(id, principal);
+    if (request == null) {
+      throw new ReglaNegocioException(Mensajes.CUERPO);
+    }
+    String texto = request.texto() == null ? "" : request.texto().trim();
+    if (texto.length() > 2000) {
+      throw new ReglaNegocioException(Mensajes.REVISE, Map.of("texto", Mensajes.CONCLUSIONES));
+    }
+    solicitud.asignarConclusiones(texto.isEmpty() ? null : texto);
+    solicitudes.saveAndFlush(solicitud);
+    return una(id, principal);
+  }
+
+  @Transactional
+  public RevisionResponse agregarAccion(long id, AccionRequest request, UsuarioPrincipal principal) {
+    Solicitud solicitud = evaluacionAbierta(id, principal);
+    if (request == null) {
+      throw new ReglaNegocioException(Mensajes.CUERPO);
+    }
+    String descripcion = texto(request.descripcion());
+    String responsable = texto(request.responsable());
+    String plazo = texto(request.plazo());
+    String estado = Catalogo.SEGUIMIENTO_CERRADA.equals(solicitud.getSeguimiento())
+        ? AccionEvaluacion.CERRADO
+        : AccionEvaluacion.EN_GESTION;
+    Map<String, String> campos = validarAccion(descripcion, responsable, plazo, estado);
+    if (!campos.isEmpty()) {
+      throw new ReglaNegocioException(Mensajes.REVISE, campos);
+    }
+    acciones.saveAndFlush(new AccionEvaluacion(
+        solicitud, descripcion, responsable, Fechas.parse(plazo), estado));
+    return una(id, principal);
+  }
+
+  private Solicitud evaluacionAbierta(long id, UsuarioPrincipal principal) {
+    exigir(principal);
+    exigirNotificada(id);
+    Solicitud solicitud = solicitudes.buscar(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO));
+    if (!Catalogo.ESTADO_EN_REVISION.equals(solicitud.getEstado().getNombre())) {
+      throw new ReglaNegocioException(Mensajes.REVISION_AUSENTE);
+    }
+    return solicitud;
+  }
+
+  private RevisionResponse una(long id, UsuarioPrincipal principal) {
     return listar(principal).stream()
         .filter(item -> item.id() == id)
         .findFirst()
         .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO));
+  }
+
+  private static Map<String, String> validarAccion(String descripcion, String responsable, String plazo, String estado) {
+    Map<String, String> campos = new java.util.LinkedHashMap<>();
+    if (descripcion.isEmpty() || descripcion.length() > 400) {
+      campos.put("descripcion", Mensajes.ACCION);
+    }
+    if (responsable.isEmpty() || responsable.length() > 80) {
+      campos.put("responsable", Mensajes.ACCION_RESPONSABLE);
+    }
+    if (!Fechas.esValida(plazo)) {
+      campos.put("plazo", Mensajes.ACCION_PLAZO);
+    }
+    if (!estadoAccionValido(estado)) {
+      campos.put("estado", Mensajes.ACCION_ESTADO);
+    }
+    return campos;
+  }
+
+  private static boolean estadoAccionValido(String estado) {
+    return AccionEvaluacion.EN_GESTION.equals(estado) || AccionEvaluacion.CERRADO.equals(estado);
+  }
+
+  private static String texto(String valor) {
+    return valor == null ? "" : valor.trim();
+  }
+
+  private AccionResponse accion(AccionEvaluacion accion, Solicitud solicitud) {
+    String seguimiento = solicitud == null ? null : solicitud.getSeguimiento();
+    String estado = Catalogo.SEGUIMIENTO_CERRADA.equals(seguimiento)
+        ? AccionEvaluacion.CERRADO
+        : AccionEvaluacion.EN_GESTION;
+    return new AccionResponse(
+        accion.getId(),
+        accion.getDescripcion(),
+        accion.getResponsable(),
+        Fechas.format(accion.getPlazo()),
+        estado);
   }
 
   public List<IndicadorResponse> indicadores(UsuarioPrincipal principal) {

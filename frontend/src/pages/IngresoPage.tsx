@@ -324,7 +324,7 @@ export function IngresoPage() {
           <>
         <div className="mt-5 flex flex-wrap items-center justify-between gap-3">
           <p className="max-w-3xl text-sm text-muted">
-            La empresa, el RUT, el correo y el teléfono se leen del cruce de los Excel. El período, la sede y la plantilla se eligen al ingresar.
+            La empresa, el RUT, el correo y el teléfono pueden salir del cruce de los Excel o escribirse a mano. El período, la sede y la plantilla se eligen al ingresar.
           </p>
           <button
             type="button"
@@ -365,7 +365,7 @@ export function IngresoPage() {
           <table className="min-w-full text-left text-sm">
             <thead className="bg-paper text-muted">
               <tr>
-                {["Empresa", "Contacto", "Período", "Sede", "Guía", "Evaluación", "Estado", "Acciones"].map((columna) => (
+                {["Empresa", "Descripción", "Contacto", "Período", "Sede", "Guía", "Evaluación", "Estado", "Acciones"].map((columna) => (
                   <th key={columna} className="px-3 py-2 font-semibold">
                     {columna}
                   </th>
@@ -382,13 +382,13 @@ export function IngresoPage() {
                     <td className="px-3 py-3">
                       <p className="font-semibold">{solicitud.nombreEmpresa}</p>
                       <p className="mt-1 text-muted">{solicitud.rut}</p>
-                      {solicitud.descripcion && <p className="mt-1 max-w-xs text-muted">{solicitud.descripcion}</p>}
                       {solicitud.estado === "solicitud rechazada" && solicitud.motivoRechazo && (
                         <p className="mt-2 max-w-xs rounded-md bg-rose-50 px-2 py-1 text-rose-950">
                           Motivo del rechazo: {solicitud.motivoRechazo}
                         </p>
                       )}
                     </td>
+                    <td className="max-w-xs px-3 py-3">{solicitud.descripcion?.trim() || "—"}</td>
                     <td className="px-3 py-3">
                       <p>{solicitud.correo}</p>
                       <p className="mt-1">{solicitud.telefono ?? "—"}</p>

@@ -58,9 +58,13 @@ export function IndicadoresPage() {
   });
   const datos = indicadores.data ?? [];
   const obras = [...new Set(datos.map((item) => item.estadoObra))];
+  const delContexto = useMemo(
+    () => datos.filter((item) => (!estadoObra || item.estadoObra === estadoObra) && (!sede || item.sedes.includes(sede))),
+    [datos, estadoObra, sede],
+  );
   const visibles = useMemo(
-    () => datos.filter((item) => (!estadoObra || item.estadoObra === estadoObra) && (!sede || item.sedes.includes(sede)) && (!desempeno || item.desempeno === desempeno)),
-    [datos, estadoObra, sede, desempeno],
+    () => delContexto.filter((item) => !desempeno || item.desempeno === desempeno),
+    [delContexto, desempeno],
   );
   const promedio = promedioDe(visibles.map((item) => Number(item.promedio)));
   const etiquetas = datos[0]?.notas.map((nota) => nota.etiqueta) ?? [];
@@ -73,7 +77,7 @@ export function IndicadoresPage() {
   });
   const porNivel = DESEMPENOS.map((nivel) => ({
     nivel,
-    cantidad: visibles.filter((item) => item.desempeno === nivel).length,
+    cantidad: delContexto.filter((item) => item.desempeno === nivel).length,
   }));
   const seleccionado = visibles.find((item) => item.id === activo) ?? null;
 

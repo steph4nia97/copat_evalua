@@ -3,7 +3,15 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { api, ErrorApi } from "../api/client";
-import { componerTelefono, esNoAplica, NO_APLICA, normalizarNombre, type TipoTelefono } from "../domain/reglas";
+import {
+  componerTelefono,
+  enmascararRut,
+  enmascararTelefono,
+  esNoAplica,
+  NO_APLICA,
+  normalizarNombre,
+  type TipoTelefono,
+} from "../domain/reglas";
 import { formularioVacio, solicitudSchema, type SolicitudFormulario } from "../domain/solicitud";
 import { CampoFecha } from "./CampoFecha";
 
@@ -48,8 +56,11 @@ type Props = {
   onGuardada: () => void;
 };
 
+const campo = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 outline-none ring-copper focus:ring-2";
+
 export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, onCerrar, onGuardada }: Props) {
   const [mensaje, setMensaje] = useState("");
+  const [modo, setModo] = useState<"cruce" | "manual">("cruce");
   const [cliente, setCliente] = useState(valores ? "actual" : "");
   const [telefonoExcel, setTelefonoExcel] = useState("");
   const cruce = useQuery({
@@ -144,8 +155,8 @@ export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, o
             <h2 className="font-serif text-2xl">{solicitudId == null ? "Ingresar solicitud" : "Editar solicitud"}</h2>
             <p className="text-sm text-muted">
               {solicitudId == null
-                ? "La empresa y el contacto salen del cruce de los Excel. El período, la sede y la plantilla se eligen aquí."
-                : "Solo se puede corregir mientras sigue ingresada."}
+                ? "Puede tomar la empresa y el contacto del cruce, o escribirlos a mano. El período, la sede y la plantilla se eligen aquí."
+                : "Solo se puede corregir mientras sigue ingresada. Los datos del cliente se pueden cambiar a mano."}
             </p>
           </div>
           <button type="button" className="text-sm text-muted" onClick={onCerrar}>
@@ -159,6 +170,79 @@ export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, o
           </p>
         )}
 
+        <div className="mb-3 flex flex-wrap gap-2">
+          <button
+            type="button"
+            aria-pressed={modo === "cruce"}
+            className={`rounded-md px-3 py-2 text-sm font-semibold ${modo === "cruce" ? "bg-pine text-white" : "border border-line bg-card"}`}
+            onClick={() => setModo("cruce")}
+          >
+            Desde el cruce
+          </button>
+          <button
+            type="button"
+            aria-pressed={modo === "manual"}
+            className={`rounded-md px-3 py-2 text-sm font-semibold ${modo === "manual" ? "bg-pine text-white" : "border border-line bg-card"}`}
+            onClick={() => {
+              setModo("manual");
+              setCliente("");
+              setTelefonoExcel("");
+            }}
+          >
+            Ingreso manual
+          </button>
+        </div>
+
+        {modo === "manual" ? (
+          <div className="grid gap-4 sm:grid-cols-2">
+            <label htmlFor="nombreEmpresa" className="text-sm font-semibold sm:col-span-2">
+              Empresa
+              <input id="nombreEmpresa" className={campo} maxLength={100} {...register("nombreEmpresa")} />
+              {errors.nombreEmpresa && <span className="mt-1 block font-normal text-copper-dark">{errors.nombreEmpresa.message}</span>}
+            </label>
+            <label htmlFor="rut" className="text-sm font-semibold">
+              RUT
+              <input
+                id="rut"
+                className={campo}
+                value={rut}
+                onChange={(evento) => setValue("rut", enmascararRut(evento.target.value), { shouldValidate: Boolean(errors.rut) })}
+              />
+              {errors.rut && <span className="mt-1 block font-normal text-copper-dark">{errors.rut.message}</span>}
+            </label>
+            <label htmlFor="correo" className="text-sm font-semibold">
+              Correo
+              <input id="correo" className={campo} {...register("correo")} placeholder="correo@empresa.cl o No aplica" />
+              {errors.correo && <span className="mt-1 block font-normal text-copper-dark">{errors.correo.message}</span>}
+            </label>
+            <fieldset className="sm:col-span-2">
+              <legend className="text-sm font-semibold">Teléfono</legend>
+              <div className="mt-2 flex flex-wrap gap-4 text-sm">
+                <label className="flex items-center gap-2">
+                  <input type="radio" value="celular" {...register("tipoTelefono")} />
+                  Celular
+                </label>
+                <label className="flex items-center gap-2">
+                  <input type="radio" value="fijo" {...register("tipoTelefono")} />
+                  Fijo
+                </label>
+              </div>
+              <input
+                id="telefono"
+                className={campo}
+                value={telefono}
+                placeholder={tipo === "fijo" ? "9 dígitos, o No aplica" : "8 dígitos sin el 9, o No aplica"}
+                onChange={(evento) => {
+                  const texto = evento.target.value;
+                  const siguiente = /[a-zA-ZáéíóúñÁÉÍÓÚÑ]/.test(texto) ? texto : enmascararTelefono(texto, tipo);
+                  setValue("telefono", siguiente, { shouldValidate: Boolean(errors.telefono) });
+                }}
+              />
+              {errors.telefono && <span className="mt-1 block text-sm text-copper-dark">{errors.telefono.message}</span>}
+            </fieldset>
+          </div>
+        ) : (
+          <>
         <label htmlFor="cliente" className="mb-1 block text-sm font-semibold">
           Cliente del Excel
         </label>
@@ -193,7 +277,7 @@ export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, o
           ))}
         </select>
         {cruce.isSuccess && opciones.length === 0 && (
-          <p className="mt-1 text-sm text-copper-dark">Cargue primero los Excel de clientes y de contactos.</p>
+          <p className="mt-1 text-sm text-muted">No hay contactos en el cruce. Puede usar el ingreso manual.</p>
         )}
         {(errors.nombreEmpresa || errors.rut || errors.correo) && (
           <p className="mt-1 text-sm text-copper-dark">
@@ -227,6 +311,8 @@ export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, o
               </dd>
             </div>
           </dl>
+        )}
+          </>
         )}
 
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -306,7 +392,7 @@ export function FormularioSolicitud({ plantillas, sedes, solicitudId, valores, o
           </button>
           <button
             type="submit"
-            disabled={crear.isPending || (solicitudId == null && cliente === "")}
+            disabled={crear.isPending || (solicitudId == null && modo === "cruce" && cliente === "")}
             className="rounded-md bg-copper px-4 py-2 text-sm font-semibold text-white hover:bg-copper-dark disabled:opacity-60"
           >
             {solicitudId == null ? "Guardar solicitud" : "Guardar cambios"}

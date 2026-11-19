@@ -78,6 +78,9 @@ public class Solicitud {
   @Column(length = 40)
   private String seguimiento;
 
+  @Column(length = 2000)
+  private String conclusiones;
+
   protected Solicitud() {}
 
   public Solicitud(
@@ -199,5 +202,13 @@ public class Solicitud {
 
   public void definirSeguimiento(String seguimiento) {
     this.seguimiento = seguimiento;
+  }
+
+  public String getConclusiones() {
+    return conclusiones;
+  }
+
+  public void asignarConclusiones(String conclusiones) {
+    this.conclusiones = conclusiones;
   }
 }

@@ -39,6 +39,11 @@ public final class Mensajes {
   public static final String DESCRIPCION_REVISION = "Escriba una nota de seguimiento.";
   public static final String SEGUIMIENTO = "Elija un estado de seguimiento.";
   public static final String SEGUIMIENTO_CERRADO = "Este caso está cerrado y no se puede volver a abrir.";
+  public static final String CONCLUSIONES = "Las conclusiones y recomendaciones admiten como máximo 2000 caracteres.";
+  public static final String ACCION = "Escriba la acción propuesta, con un máximo de 400 caracteres.";
+  public static final String ACCION_RESPONSABLE = "Indique el responsable, con un máximo de 80 caracteres.";
+  public static final String ACCION_PLAZO = "Ingrese el plazo en formato dd/mm/aaaa.";
+  public static final String ACCION_ESTADO = "Elija En gestión o Cerrado.";
   public static final String DESCRIPCION_REVISION_LARGA = "La descripción admite como máximo 500 caracteres.";
   public static final String EVIDENCIA = "La evidencia debe ser un PDF o una imagen PNG o JPG de hasta 8 MB.";
   public static final String ARCHIVO_GRANDE = "El archivo supera el tamaño permitido de 8 MB.";
@@ -89,6 +94,15 @@ public final class Mensajes {
   public static final String RECLAMO_CIERRE = "Ingrese la fecha de cierre en formato dd/mm/aaaa.";
   public static final String RECLAMO_HORA = "Ingrese la hora de finalización en formato hh:mm.";
   public static final String RECLAMO_SEDE = "Seleccione la sede responsable del reclamo.";
+  public static final String RECLAMO_INFORME = "El informe se descarga cuando el reclamo está cerrado.";
+  public static final String GESTION_PERIODO = "Indique el periodo evaluado en formato dd/mm/aaaa.";
+  public static final String GESTION_NOMBRE = "El nombre o el cargo admiten como máximo 80 caracteres.";
+  public static final String GESTION_ANALISIS = "El análisis admite como máximo 1000 caracteres.";
+  public static final String GESTION_CONCLUSIONES = "Las conclusiones y acciones de mejora admiten como máximo 2000 caracteres.";
+  public static final String GESTION_FECHA = "Ingrese la fecha de la firma en formato dd/mm/aaaa.";
+  public static final String GESTION_FIRMANTE = "Seleccione una persona activa según su perfil.";
+  public static final String GESTION_FIRMA = "La firma debe ser una imagen PNG o JPG de hasta 1 MB.";
+  public static final String GESTION_FIRMA_PREVIA = "Marque la firma virtual y guarde el informe antes de subir el archivo.";
   public static final String EXCEL = "Adjunte un archivo Excel (.xlsx).";
   public static final String EXCEL_CLIENTES = "La primera fila debe incluir RUT y Razón social o Nombre empresa. Las demás columnas, como Guía de despacho, se pueden dejar.";
   public static final String EXCEL_CONTACTOS = "La primera fila debe incluir RUT, Razón social y Nombre contacto. Si falta el correo o el teléfono, se guarda como No aplica.";

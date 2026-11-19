@@ -11,9 +11,11 @@ import cl.copat.evalua.departamento1.seguridad.UsuarioPrincipal;
 import cl.copat.evalua.publico.api.ReclamoRequest;
 import cl.copat.evalua.publico.api.ReclamoResponse;
 import cl.copat.evalua.publico.api.SeguimientoRequest;
+import cl.copat.evalua.publico.dominio.InformeReclamo;
 import cl.copat.evalua.publico.dominio.ReclamoCatalogo;
 import cl.copat.evalua.publico.persistencia.Reclamo;
 import cl.copat.evalua.publico.persistencia.ReclamoRepository;
+import cl.copat.evalua.shared.web.ArchivoDescarga;
 import cl.copat.evalua.shared.web.ReglaNegocioException;
 import java.time.Clock;
 import java.time.LocalDate;
@@ -171,7 +173,6 @@ public class ReclamoService {
       throw new ReglaNegocioException(Mensajes.CUERPO);
     }
     Map<String, String> campos = new LinkedHashMap<>();
-    String estado = texto(request.estado());
     String area = texto(request.area());
     String responsable = texto(request.responsable());
     String gestion = texto(request.fechaGestion());
@@ -180,11 +181,9 @@ public class ReclamoService {
     String hora = texto(request.horaCierre());
     String solucion = texto(request.solucion());
     String sedeNombre = texto(request.sede());
-    boolean gestiona = ReclamoCatalogo.ESTADO_GESTION.equals(estado) || ReclamoCatalogo.ESTADO_CERRADO.equals(estado);
+    String estado = estadoAutomatico(observaciones, cierre, hora, solucion);
+    boolean gestiona = !ReclamoCatalogo.ESTADO_RECIBIDO.equals(estado);
     boolean cierra = ReclamoCatalogo.ESTADO_CERRADO.equals(estado);
-    if (!ReclamoCatalogo.ESTADOS.contains(estado)) {
-      campos.put("estado", Mensajes.RECLAMO_SEGUIMIENTO);
-    }
     if (gestiona && (area.isEmpty() || area.length() > 80)) {
       campos.put("area", Mensajes.RECLAMO_AREA);
     } else if (area.length() > 80) {
@@ -250,6 +249,66 @@ public class ReclamoService {
         solucion.isEmpty() ? null : solucion,
         sede);
     return respuesta(reclamo);
+  }
+
+  public ArchivoDescarga informe(long id, UsuarioPrincipal principal) {
+    if (principal.departamentoId() != Catalogo.DEPARTAMENTO_3) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, Mensajes.PROHIBIDO);
+    }
+    Reclamo reclamo = reclamos.findById(id)
+        .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, Mensajes.NO_ENCONTRADO));
+    if (!ReclamoCatalogo.ESTADO_CERRADO.equals(reclamo.getEstado())) {
+      throw new ReglaNegocioException(Mensajes.RECLAMO_INFORME);
+    }
+    return new ArchivoDescarga(
+        InformeReclamo.nombreArchivo(id),
+        "application/pdf",
+        InformeReclamo.generar(id, filas(reclamo)));
+  }
+
+  private static List<InformeReclamo.Fila> filas(Reclamo reclamo) {
+    String inicio = Fechas.format(reclamo.getRecibidoEn().toLocalDate())
+        + " " + reclamo.getRecibidoEn().toLocalTime().withNano(0).format(HORA);
+    String sede = reclamo.getSede() == null ? "" : reclamo.getSede().getNombre();
+    return List.of(
+        fila("Datos ingresados", "Id", String.valueOf(reclamo.getId())),
+        fila("Datos ingresados", "Hora de inicio", inicio),
+        fila("Datos ingresados", "Correo electrónico", reclamo.getCorreo()),
+        fila("Datos ingresados", "Nombre", reclamo.getNombre()),
+        fila("Datos ingresados", "Empresa / razón social", reclamo.getEmpresa()),
+        fila("Datos ingresados", "Teléfono de contacto", reclamo.getTelefono()),
+        fila("Datos ingresados", "Nombre de la obra", reclamo.getObra()),
+        fila("Datos ingresados", "Ubicación (dirección, comuna, ciudad)", reclamo.getUbicacion()),
+        fila("Datos ingresados", "Fecha del servicio", Fechas.format(reclamo.getFechaServicio())),
+        fila("Datos ingresados", "Guía de despacho / orden (si aplica)", reclamo.getGuiaDespacho()),
+        fila("Datos ingresados", "Tipo de reclamo", reclamo.getTipo()),
+        fila("Datos ingresados", "Descripción del reclamo", reclamo.getDescripcion()),
+        fila("Datos ingresados", "¿Cómo prefiere que lo contactemos?", reclamo.getPreferenciaContacto()),
+        fila("Datos ingresados", "Horario preferido para contacto", reclamo.getHorario()),
+        fila("Datos ingresados", "Comentarios adicionales", reclamo.getComentarios()),
+        fila("Seguimiento", "Estado del reclamo", reclamo.getEstado()),
+        fila("Seguimiento", "Área responsable", reclamo.getAreaResponsable()),
+        fila("Seguimiento", "Sede responsable", sede),
+        fila("Seguimiento", "Persona responsable del reclamo", reclamo.getResponsable()),
+        fila("Seguimiento", "Fecha de gestión", reclamo.getFechaGestion() == null ? "" : Fechas.format(reclamo.getFechaGestion())),
+        fila("Seguimiento", "Observaciones internas", reclamo.getObservaciones()),
+        fila("Seguimiento", "Fecha de cierre", reclamo.getFechaCierre() == null ? "" : Fechas.format(reclamo.getFechaCierre())),
+        fila("Seguimiento", "Hora de finalización", reclamo.getHoraCierre() == null ? "" : reclamo.getHoraCierre().format(HORA)),
+        fila("Seguimiento", "Solución", reclamo.getSolucion()));
+  }
+
+  private static InformeReclamo.Fila fila(String seccion, String etiqueta, String valor) {
+    return new InformeReclamo.Fila(seccion, etiqueta, valor);
+  }
+
+  private static String estadoAutomatico(String observaciones, String cierre, String hora, String solucion) {
+    if (!cierre.isEmpty() || !hora.isEmpty() || !solucion.isEmpty()) {
+      return ReclamoCatalogo.ESTADO_CERRADO;
+    }
+    if (!observaciones.isEmpty()) {
+      return ReclamoCatalogo.ESTADO_GESTION;
+    }
+    return ReclamoCatalogo.ESTADO_RECIBIDO;
   }
 
   private static String texto(String valor) {

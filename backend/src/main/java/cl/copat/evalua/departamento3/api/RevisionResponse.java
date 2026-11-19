@@ -31,11 +31,15 @@ public record RevisionResponse(
     boolean tienePdf,
     boolean reenviada,
     String seguimiento,
-    List<NotaSeguimientoResponse> notasSeguimiento) {
+    List<NotaSeguimientoResponse> notasSeguimiento,
+    String conclusiones,
+    List<AccionResponse> acciones) {
 
   public record MovimientoResponse(String accion, String trabajador, String fecha, String hora) {}
 
   public record NotaResponse(String etiqueta, Integer valor) {}
+
+  public record AccionResponse(long id, String descripcion, String responsable, String plazo, String estado) {}
 
   public record NotaSeguimientoResponse(
       long id,

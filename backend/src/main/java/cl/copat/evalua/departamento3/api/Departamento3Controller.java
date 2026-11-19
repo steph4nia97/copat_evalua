@@ -5,8 +5,14 @@ import cl.copat.evalua.departamento1.aplicacion.SolicitudService;
 import cl.copat.evalua.departamento1.seguridad.UsuarioPrincipal;
 import cl.copat.evalua.departamento3.aplicacion.Departamento3Service;
 import cl.copat.evalua.departamento3.api.IndicadorResponse;
+import cl.copat.evalua.departamento3.api.AccionRequest;
+import cl.copat.evalua.departamento3.api.ConclusionesRequest;
+import cl.copat.evalua.publico.api.FirmanteResponse;
+import cl.copat.evalua.publico.api.GestionReclamosRequest;
+import cl.copat.evalua.publico.api.GestionReclamosResponse;
 import cl.copat.evalua.publico.api.ReclamoResponse;
 import cl.copat.evalua.publico.api.SeguimientoRequest;
+import cl.copat.evalua.publico.aplicacion.GestionReclamosService;
 import cl.copat.evalua.publico.aplicacion.ReclamoService;
 import cl.copat.evalua.shared.web.ArchivoDescarga;
 import java.util.List;
@@ -31,14 +37,17 @@ public class Departamento3Controller {
   private final Departamento3Service servicio;
   private final SolicitudService solicitudes;
   private final ReclamoService reclamoServicio;
+  private final GestionReclamosService gestionReclamos;
 
   public Departamento3Controller(
       Departamento3Service servicio,
       SolicitudService solicitudes,
-      ReclamoService reclamoServicio) {
+      ReclamoService reclamoServicio,
+      GestionReclamosService gestionReclamos) {
     this.servicio = servicio;
     this.solicitudes = solicitudes;
     this.reclamoServicio = reclamoServicio;
+    this.gestionReclamos = gestionReclamos;
   }
 
   @GetMapping("/bitacora")
@@ -71,6 +80,22 @@ public class Departamento3Controller {
     return servicio.guardar(id, descripcion, estado, evidencia, principal(authentication));
   }
 
+  @PutMapping("/solicitudes/{id}/conclusiones")
+  public RevisionResponse conclusiones(
+      @PathVariable long id,
+      @RequestBody ConclusionesRequest body,
+      Authentication authentication) {
+    return servicio.guardarConclusiones(id, body, principal(authentication));
+  }
+
+  @PostMapping("/solicitudes/{id}/acciones")
+  public RevisionResponse accion(
+      @PathVariable long id,
+      @RequestBody AccionRequest body,
+      Authentication authentication) {
+    return servicio.agregarAccion(id, body, principal(authentication));
+  }
+
   @GetMapping("/indicadores")
   public List<IndicadorResponse> indicadores(Authentication authentication) {
     return servicio.indicadores(principal(authentication));
@@ -79,6 +104,61 @@ public class Departamento3Controller {
   @GetMapping("/reclamos")
   public List<ReclamoResponse> reclamos(Authentication authentication) {
     return reclamoServicio.listar(principal(authentication));
+  }
+
+  @GetMapping("/reclamos/firmantes")
+  public List<FirmanteResponse> firmantes(Authentication authentication) {
+    return gestionReclamos.firmantes(principal(authentication));
+  }
+
+  @GetMapping("/reclamos/gestion")
+  public GestionReclamosResponse gestion(
+      @RequestParam String desde,
+      @RequestParam String hasta,
+      Authentication authentication) {
+    return gestionReclamos.consultar(desde, hasta, principal(authentication));
+  }
+
+  @PutMapping("/reclamos/gestion")
+  public GestionReclamosResponse guardarGestion(
+      @RequestBody GestionReclamosRequest body,
+      Authentication authentication) {
+    return gestionReclamos.guardar(body, principal(authentication));
+  }
+
+  @GetMapping("/reclamos/gestion/firma")
+  public ResponseEntity<byte[]> firmaGestion(
+      @RequestParam String desde,
+      @RequestParam String hasta,
+      @RequestParam String rol,
+      Authentication authentication) {
+    ArchivoDescarga descarga = gestionReclamos.firma(desde, hasta, rol, principal(authentication));
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType(descarga.mediaType()))
+        .body(descarga.contenido());
+  }
+
+  @PostMapping(value = "/reclamos/gestion/firma", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public GestionReclamosResponse subirFirmaGestion(
+      @RequestParam String desde,
+      @RequestParam String hasta,
+      @RequestParam String rol,
+      @RequestParam("archivo") MultipartFile archivo,
+      Authentication authentication) {
+    return gestionReclamos.subirFirma(desde, hasta, rol, archivo, principal(authentication));
+  }
+
+  @GetMapping("/reclamos/gestion/informe")
+  public ResponseEntity<byte[]> informeGestion(
+      @RequestParam String desde,
+      @RequestParam String hasta,
+      Authentication authentication) {
+    return archivo(gestionReclamos.informe(desde, hasta, principal(authentication)));
+  }
+
+  @GetMapping("/reclamos/{id}/informe")
+  public ResponseEntity<byte[]> informe(@PathVariable long id, Authentication authentication) {
+    return archivo(reclamoServicio.informe(id, principal(authentication)));
   }
 
   @PutMapping("/reclamos/{id}")

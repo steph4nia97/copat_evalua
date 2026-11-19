@@ -47,6 +47,7 @@ class AdminIntegracionTest {
     jdbc.update("DELETE FROM notificacion");
     jdbc.update("DELETE FROM solicitud_evaluacion");
     jdbc.update("DELETE FROM solicitud_pdf");
+    jdbc.update("DELETE FROM accion_evaluacion");
     jdbc.update("DELETE FROM solicitud_log");
     jdbc.update("DELETE FROM solicitud_sede");
     jdbc.update("DELETE FROM solicitud");
