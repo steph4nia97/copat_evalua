@@ -1,5 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, descargar, ErrorApi } from "../api/client";
 import { useSesion } from "../auth/sesion";
 import { CampoFecha } from "../components/CampoFecha";
@@ -46,12 +46,90 @@ const TIPOS = [
 
 const SIN_SEDE = "Sin sede";
 
-function estadoAutomatico(observaciones: string, fechaCierre: string, horaCierre: string, solucion: string) {
-  if (fechaCierre.trim() || horaCierre.trim() || solucion.trim()) return "Cerrado";
+function estadoAutomatico(observaciones: string, solucion: string) {
+  if (solucion.trim()) return "Cerrado";
   if (observaciones.trim()) return "En gestión";
   return "Recibido";
 }
 const campo = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+
+const AREAS_RESPONSABLES = ["Ventas", "Calidad", "Operaciones", "Administración", "Finanzas"];
+
+function areasDesdeTexto(valor: string | null): string[] {
+  const partes = (valor ?? "")
+    .split(",")
+    .map((parte) => parte.trim())
+    .filter(Boolean);
+  return AREAS_RESPONSABLES.filter((opcion) =>
+    partes.some((parte) => parte.localeCompare(opcion, "es", { sensitivity: "base" }) === 0),
+  );
+}
+
+function MenuAreas({
+  seleccion,
+  texto,
+  onChange,
+  error,
+}: {
+  seleccion: string[];
+  texto: string;
+  onChange: (seleccion: string[]) => void;
+  error?: string;
+}) {
+  const [abierto, setAbierto] = useState(false);
+  const caja = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!abierto) return;
+    function fuera(evento: MouseEvent) {
+      if (caja.current && !caja.current.contains(evento.target as Node)) setAbierto(false);
+    }
+    function tecla(evento: KeyboardEvent) {
+      if (evento.key === "Escape") setAbierto(false);
+    }
+    document.addEventListener("mousedown", fuera);
+    document.addEventListener("keydown", tecla);
+    return () => {
+      document.removeEventListener("mousedown", fuera);
+      document.removeEventListener("keydown", tecla);
+    };
+  }, [abierto]);
+
+  function alternar(opcion: string) {
+    const siguiente = seleccion.includes(opcion)
+      ? seleccion.filter((item) => item !== opcion)
+      : AREAS_RESPONSABLES.filter((item) => item === opcion || seleccion.includes(item));
+    onChange(siguiente);
+  }
+
+  return (
+    <div ref={caja} className="relative">
+      <button
+        type="button"
+        aria-expanded={abierto}
+        aria-haspopup="listbox"
+        className={`${campo} flex items-center justify-between gap-2 text-left font-normal`}
+        onClick={() => setAbierto((valor) => !valor)}
+      >
+        <span className={texto ? "" : "text-muted"}>{texto || "Seleccione el área"}</span>
+        <span aria-hidden="true">▾</span>
+      </button>
+      {abierto && (
+        <ul className="absolute z-20 mt-1 w-full rounded-md border border-line bg-card p-1 shadow-card">
+          {AREAS_RESPONSABLES.map((opcion) => (
+            <li key={opcion}>
+              <label className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm font-normal hover:bg-paper">
+                <input type="checkbox" checked={seleccion.includes(opcion)} onChange={() => alternar(opcion)} />
+                {opcion}
+              </label>
+            </li>
+          ))}
+        </ul>
+      )}
+      {error && <Aviso texto={error} />}
+    </div>
+  );
+}
 
 function instante(reclamo: Reclamo) {
   const [dia, mes, anio] = reclamo.fecha.split("/").map(Number);
@@ -75,7 +153,11 @@ export function ReclamosPage() {
   const [recientes, setRecientes] = useState(true);
   const [abierto, setAbierto] = useState<number | null>(null);
   const [vista, setVista] = useState<"seguimiento" | "gestion">("seguimiento");
-  const enlace = `${window.location.origin}/reclamo`;
+  const publico = useQuery({
+    queryKey: ["reclamo-enlace"],
+    queryFn: () => api<{ enlace: string }>("/api/departamento3/reclamos/enlace"),
+  });
+  const enlace = publico.data?.enlace ?? "";
   const reclamos = useQuery({
     queryKey: ["reclamos"],
     queryFn: () => api<Reclamo[]>("/api/departamento3/reclamos"),
@@ -143,13 +225,17 @@ export function ReclamosPage() {
           <>
         <h1 className="mt-4 font-serif text-3xl">Seguimiento de reclamos</h1>
         <p className="mt-1 max-w-3xl text-sm text-muted">
-          Planilla D-SIG-09-02. Los datos los ingresa el cliente. El estado cambia solo: Recibido al llegar, En gestión con observaciones internas, y Cerrado al completar el cierre.
+          Planilla D-SIG-09-02. Los datos los ingresa el cliente. El estado cambia solo: Recibido al llegar, En gestión al escribir observaciones, y Cerrado al escribir la solución.
         </p>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <input readOnly value={enlace} aria-label="Enlace de reclamos" className="w-full max-w-md rounded-md border border-line bg-card px-3 py-2 text-sm" onFocus={(evento) => evento.currentTarget.select()} />
-          <button type="button" onClick={() => void copiar()} className="rounded-md bg-pine px-3 py-2 text-sm font-semibold text-white">
-            {copiado ? "Enlace copiado" : "Copiar enlace"}
-          </button>
+        <div className="mt-4">
+          <p className="text-sm font-semibold">Enlace para la página oficial</p>
+          <p className="mt-1 max-w-3xl text-sm text-muted">Cópielo en el sitio de Copat. El cliente entra por ahí, sin la intranet.</p>
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <input readOnly value={enlace} aria-label="Enlace de reclamos" className="w-full max-w-md rounded-md border border-line bg-card px-3 py-2 text-sm" onFocus={(evento) => evento.currentTarget.select()} />
+            <button type="button" disabled={!enlace} onClick={() => void copiar()} className="rounded-md bg-pine px-3 py-2 text-sm font-semibold text-white disabled:opacity-60">
+              {copiado ? "Enlace copiado" : "Copiar enlace"}
+            </button>
+          </div>
         </div>
 
         <section className="relative z-20 mt-5 rounded-xl border border-line bg-card p-4">
@@ -235,7 +321,6 @@ export function ReclamosPage() {
                     <th className="px-3 py-2 font-semibold">Tipo de reclamo</th>
                     <th className="px-3 py-2 font-semibold">Estado del reclamo</th>
                     <th className="px-3 py-2 font-semibold">Persona responsable</th>
-                    <th className="px-3 py-2 font-semibold">Fecha de gestión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -260,7 +345,6 @@ export function ReclamosPage() {
                         <span className="rounded-full bg-paper px-2 py-1 text-xs font-semibold">{reclamo.estado}</span>
                       </td>
                       <td className="px-3 py-3">{reclamo.responsable ?? "—"}</td>
-                      <td className="px-3 py-3">{reclamo.fechaGestion ?? "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -308,28 +392,28 @@ function Detalle({ reclamo, onCerrar }: { reclamo: Reclamo; onCerrar: () => void
             Cerrar
           </button>
         </div>
-        <section className="mt-4">
-          <h3 className="text-sm font-semibold">Datos ingresados</h3>
-          <dl className="mt-2 grid gap-2 text-sm sm:grid-cols-2">
+        <section className="mt-4 rounded-lg border border-line bg-paper p-4">
+          <h3 className="text-base font-semibold text-ink">Datos ingresados</h3>
+          <dl className="mt-3 grid items-stretch gap-x-4 gap-y-3 sm:grid-cols-2">
             <Dato etiqueta="Id" valor={String(reclamo.id)} />
-            <Dato etiqueta="Hora de inicio" valor={`${reclamo.fecha} ${reclamo.hora}`} />
-            <Dato etiqueta="Hora de finalización" valor={reclamo.horaCierre ?? "—"} />
-            <Dato etiqueta="Correo electrónico" valor={reclamo.correo} />
-            <Dato etiqueta="Nombre" valor={reclamo.nombre} />
+            <Dato etiqueta="Hora de ingreso del reclamo" valor={`${reclamo.fecha} ${reclamo.hora}`} />
             <Dato etiqueta="Empresa / razón social" valor={reclamo.empresa} />
-            <Dato etiqueta="Teléfono de contacto" valor={reclamo.telefono} />
             <Dato etiqueta="Nombre de la obra" valor={reclamo.obra} />
             <Dato etiqueta="Ubicación (dirección, comuna, ciudad)" valor={reclamo.ubicacion} />
-            <Dato etiqueta="Fecha del servicio" valor={reclamo.fechaServicio} />
-            <Dato etiqueta="Guía de despacho / orden (si aplica)" valor={reclamo.guiaDespacho ?? "—"} />
-            <Dato etiqueta="Tipo de reclamo" valor={reclamo.tipo} />
-            <Dato etiqueta="¿Cómo prefiere que lo contactemos?" valor={reclamo.preferenciaContacto} />
+            <Dato etiqueta="Guía de despacho / orden" valor={reclamo.guiaDespacho ?? "—"} />
+            <Dato etiqueta="Nombre de contacto" valor={reclamo.nombre} />
+            <Dato etiqueta="Correo electrónico" valor={reclamo.correo} />
+            <Dato etiqueta="Teléfono de contacto" valor={reclamo.telefono} />
             <Dato etiqueta="Horario preferido para contacto" valor={reclamo.horario ?? "—"} />
+            <Dato etiqueta="¿Cómo prefiere que lo contactemos?" valor={reclamo.preferenciaContacto} />
+            <div className="hidden sm:block" aria-hidden="true" />
+            <Dato etiqueta="Tipo de reclamo" valor={reclamo.tipo} />
+            <Dato etiqueta="Fecha del servicio" valor={reclamo.fechaServicio} />
             <div className="sm:col-span-2">
-              <Dato etiqueta="Descripción del reclamo" valor={reclamo.descripcion} />
+              <Dato etiqueta="Descripción del reclamo" valor={reclamo.descripcion} relato />
             </div>
             <div className="sm:col-span-2">
-              <Dato etiqueta="Comentarios adicionales" valor={reclamo.comentarios ?? "—"} />
+              <Dato etiqueta="Comentarios adicionales" valor={reclamo.comentarios ?? "—"} relato />
             </div>
           </dl>
         </section>
@@ -359,27 +443,25 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
   ].join("|");
   const [sede, setSede] = useState(reclamo.sede ?? "");
   const [area, setArea] = useState(reclamo.area ?? "");
+  const [areas, setAreas] = useState<string[]>(() => areasDesdeTexto(reclamo.area));
+  const [areaTocada, setAreaTocada] = useState(false);
   const [responsable, setResponsable] = useState(reclamo.responsable ?? usuario?.nombre ?? "");
-  const [fechaGestion, setFechaGestion] = useState(reclamo.fechaGestion ?? "");
   const [observaciones, setObservaciones] = useState(reclamo.observaciones ?? "");
-  const [fechaCierre, setFechaCierre] = useState(reclamo.fechaCierre ?? "");
-  const [horaCierre, setHoraCierre] = useState(reclamo.horaCierre ?? "");
   const [solucion, setSolucion] = useState(reclamo.solucion ?? "");
   const [error, setError] = useState("");
   const [campos, setCampos] = useState<Record<string, string>>({});
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
-  const estado = estadoAutomatico(observaciones, fechaCierre, horaCierre, solucion);
+  const estado = estadoAutomatico(observaciones, solucion);
   const gestiona = estado !== "Recibido";
 
   useEffect(() => {
     setSede(reclamo.sede ?? "");
     setArea(reclamo.area ?? "");
+    setAreas(areasDesdeTexto(reclamo.area));
+    setAreaTocada(false);
     setResponsable(reclamo.responsable ?? usuario?.nombre ?? "");
-    setFechaGestion(reclamo.fechaGestion ?? "");
     setObservaciones(reclamo.observaciones ?? "");
-    setFechaCierre(reclamo.fechaCierre ?? "");
-    setHoraCierre(reclamo.horaCierre ?? "");
     setSolucion(reclamo.solucion ?? "");
   }, [firma, reclamo, usuario?.nombre]);
 
@@ -407,10 +489,7 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
           estado,
           area,
           responsable,
-          fechaGestion,
           observaciones,
-          fechaCierre,
-          horaCierre,
           solucion,
           sede,
         }),
@@ -442,14 +521,22 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
         <span className="font-semibold">Estado del reclamo</span>
         <span className="mt-1 block">{estado}</span>
         <span className="mt-1 block text-xs font-normal text-muted">
-          Al recibirlo queda Recibido. Si escribes observaciones internas, pasa a En gestión. Si completas la fecha de cierre, la hora de finalización o la solución, el caso se cierra.
+          Al recibirlo queda Recibido. Si escribes observaciones internas, pasa a En gestión. Si escribes la solución, el caso se cierra. Las fechas quedan solo en el informe.
         </span>
       </p>
-      <label className="text-sm font-semibold">
+      <div className="text-sm font-semibold">
         Área responsable{gestiona ? " *" : ""}
-        <input className={campo} value={area} maxLength={80} onChange={(evento) => setArea(evento.target.value)} />
-        {campos.area && <Aviso texto={campos.area} />}
-      </label>
+        <MenuAreas
+          seleccion={areas}
+          texto={areaTocada || areas.length > 0 ? areas.join(", ") : area}
+          error={campos.area}
+          onChange={(seleccion) => {
+            setAreas(seleccion);
+            setArea(seleccion.join(", "));
+            setAreaTocada(true);
+          }}
+        />
+      </div>
       <label className="text-sm font-semibold">
         Sede responsable{gestiona ? " *" : ""}
         <select className={campo} value={sede} onChange={(evento) => setSede(evento.target.value)}>
@@ -467,25 +554,10 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
         <input className={campo} value={responsable} maxLength={80} onChange={(evento) => setResponsable(evento.target.value)} />
         {campos.responsable && <Aviso texto={campos.responsable} />}
       </label>
-      <label className="text-sm font-semibold">
-        Fecha de gestión{gestiona ? " *" : ""}
-        <input className={campo} value={fechaGestion} placeholder="dd/mm/aaaa" onChange={(evento) => setFechaGestion(evento.target.value)} />
-        {campos.fechaGestion && <Aviso texto={campos.fechaGestion} />}
-      </label>
       <label className="text-sm font-semibold sm:col-span-2">
         Observaciones internas
         <textarea className={campo} rows={2} maxLength={500} value={observaciones} onChange={(evento) => setObservaciones(evento.target.value)} />
         {campos.observaciones && <Aviso texto={campos.observaciones} />}
-      </label>
-      <label className="text-sm font-semibold">
-        Fecha de cierre
-        <input className={campo} value={fechaCierre} placeholder="dd/mm/aaaa" onChange={(evento) => setFechaCierre(evento.target.value)} />
-        {campos.fechaCierre && <Aviso texto={campos.fechaCierre} />}
-      </label>
-      <label className="text-sm font-semibold">
-        Hora de finalización
-        <input className={campo} value={horaCierre} placeholder="hh:mm" onChange={(evento) => setHoraCierre(evento.target.value)} />
-        {campos.horaCierre && <Aviso texto={campos.horaCierre} />}
       </label>
       <label className="text-sm font-semibold sm:col-span-2">
         Solución{estado === "Cerrado" ? " *" : ""}
@@ -515,11 +587,19 @@ function Formulario({ reclamo }: { reclamo: Reclamo }) {
   );
 }
 
-function Dato({ etiqueta, valor }: { etiqueta: string; valor: string }) {
+function Dato({ etiqueta, valor, relato = false }: { etiqueta: string; valor: string; relato?: boolean }) {
   return (
-    <div>
-      <dt className="text-xs text-muted">{etiqueta}</dt>
-      <dd>{valor}</dd>
+    <div className="flex h-full flex-col gap-1.5">
+      <dt className="text-sm font-semibold leading-5 text-ink">{etiqueta}</dt>
+      <dd
+        className={
+          relato
+            ? "min-h-24 flex-1 whitespace-pre-wrap rounded-md border border-pine/25 bg-pine-soft px-3 py-3 text-sm leading-6 text-ink"
+            : "min-h-10 flex-1 rounded-md border border-line bg-card px-3 py-2 text-xs leading-5 text-muted"
+        }
+      >
+        {valor}
+      </dd>
     </div>
   );
 }

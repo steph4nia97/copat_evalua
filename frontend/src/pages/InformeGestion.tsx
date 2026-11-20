@@ -47,10 +47,31 @@ type Gestion = {
 type Firmante = { id: number; nombre: string; cargo: string; departamento: string };
 
 const campo = "mt-1 w-full rounded-md border border-line bg-white px-3 py-2 text-sm";
+const SUBGERENTE_CORREO = "hugomunoz@copat.cl";
+const SUBGERENTE_NOMBRE = "Hugo Muñoz";
 
 function textoError(err: unknown, respaldo: string) {
   if (!(err instanceof ErrorApi)) return respaldo;
   return Object.values(err.campos)[0] || err.message;
+}
+
+function fechaDeHoy() {
+  const ahora = new Date();
+  const dia = String(ahora.getDate()).padStart(2, "0");
+  const mes = String(ahora.getMonth() + 1).padStart(2, "0");
+  return `${dia}/${mes}/${ahora.getFullYear()}`;
+}
+
+function fechaFirma(
+  virtual: boolean,
+  personaId: string,
+  guardadoId: number | null | undefined,
+  guardadaFecha: string | null | undefined,
+  guardadaVirtual: boolean,
+) {
+  if (!virtual || !personaId) return "";
+  if (guardadaVirtual && guardadaFecha && String(guardadoId ?? "") === personaId) return guardadaFecha;
+  return fechaDeHoy();
 }
 
 export function InformeGestion() {
@@ -63,29 +84,17 @@ export function InformeGestion() {
   const [aprobadoPor, setAprobadoPor] = useState("");
   const [efectividad, setEfectividad] = useState("");
   const [conclusiones, setConclusiones] = useState("");
-  const [comercialId, setComercialId] = useState("");
-  const [comercialFecha, setComercialFecha] = useState("");
   const [comercialVirtual, setComercialVirtual] = useState(false);
-  const [gerenciaId, setGerenciaId] = useState("");
-  const [gerenciaFecha, setGerenciaFecha] = useState("");
-  const [gerenciaVirtual, setGerenciaVirtual] = useState(false);
   const [comercialArchivo, setComercialArchivo] = useState<File | null>(null);
-  const [gerenciaArchivo, setGerenciaArchivo] = useState<File | null>(null);
   const [comercialQuitar, setComercialQuitar] = useState(false);
-  const [gerenciaQuitar, setGerenciaQuitar] = useState(false);
   const [comercialVista, setComercialVista] = useState("");
-  const [gerenciaVista, setGerenciaVista] = useState("");
   const [comercialClave, setComercialClave] = useState(0);
-  const [gerenciaClave, setGerenciaClave] = useState(0);
-  const firmantes = useQuery({
-    queryKey: ["firmantes"],
-    queryFn: () => api<Firmante[]>("/api/departamento3/reclamos/firmantes"),
-  });
   const [error, setError] = useState("");
   const [aviso, setAviso] = useState("");
   const [guardando, setGuardando] = useState(false);
   const rangoInvalido = fechaValida(desde) && fechaValida(hasta) && compararFechas(desde, hasta) > 0;
   const listo = fechaValida(desde) && fechaValida(hasta) && !rangoInvalido;
+  const esSubgerente = usuario?.email?.toLowerCase() === SUBGERENTE_CORREO;
   const gestion = useQuery({
     queryKey: ["gestion-reclamos", desde, hasta],
     queryFn: () => api<Gestion>(`/api/departamento3/reclamos/gestion?desde=${encodeURIComponent(desde)}&hasta=${encodeURIComponent(hasta)}`),
@@ -100,19 +109,12 @@ export function InformeGestion() {
     setAprobadoPor(datos.aprobadoPor ?? "");
     setEfectividad(datos.efectividad ?? "");
     setConclusiones(datos.conclusiones ?? "");
-    setComercialId(datos.comercialUsuarioId ? String(datos.comercialUsuarioId) : "");
-    setComercialFecha(datos.comercialFecha ?? "");
     setComercialVirtual(datos.comercialFirmaVirtual);
-    setGerenciaId(datos.gerenciaUsuarioId ? String(datos.gerenciaUsuarioId) : "");
-    setGerenciaFecha(datos.gerenciaFecha ?? "");
-    setGerenciaVirtual(datos.gerenciaFirmaVirtual);
   }, [gestion.data, usuario]);
 
   useEffect(() => {
     setComercialArchivo(null);
-    setGerenciaArchivo(null);
     setComercialQuitar(false);
-    setGerenciaQuitar(false);
   }, [desde, hasta]);
 
   useEffect(() => {
@@ -155,12 +157,11 @@ export function InformeGestion() {
       }
     }
     void preparar("comercial", Boolean(gestion.data?.comercialTieneFirma), comercialArchivo, comercialQuitar, setComercialVista);
-    void preparar("gerencia", Boolean(gestion.data?.gerenciaTieneFirma), gerenciaArchivo, gerenciaQuitar, setGerenciaVista);
     return () => {
       activo = false;
       for (const url of urls) URL.revokeObjectURL(url);
     };
-  }, [gestion.data, desde, hasta, comercialArchivo, gerenciaArchivo, comercialQuitar, gerenciaQuitar]);
+  }, [gestion.data, desde, hasta, comercialArchivo, comercialQuitar]);
 
   function elegirFirma(archivo: File | null, asignar: (valor: File | null) => void, aceptar: () => void, reiniciar: () => void) {
     setError("");
@@ -204,29 +205,18 @@ export function InformeGestion() {
           aprobadoPor,
           efectividad,
           conclusiones,
-          comercialUsuarioId: comercialId ? Number(comercialId) : null,
-          comercialFecha,
-          comercialFirmaVirtual: Boolean(comercialId) && comercialVirtual,
-          comercialQuitarFirma: comercialQuitar || !comercialVirtual,
-          gerenciaUsuarioId: gerenciaId ? Number(gerenciaId) : null,
-          gerenciaFecha,
-          gerenciaFirmaVirtual: Boolean(gerenciaId) && gerenciaVirtual,
-          gerenciaQuitarFirma: gerenciaQuitar || !gerenciaVirtual,
+          comercialUsuarioId: null,
+          comercialFirmaVirtual: esSubgerente && comercialVirtual,
+          comercialQuitarFirma: esSubgerente && (comercialQuitar || !comercialVirtual),
         }),
       });
-      if (comercialId && comercialVirtual && comercialArchivo) {
+      if (esSubgerente && comercialVirtual && comercialArchivo) {
         await subirFirma("comercial", comercialArchivo);
-      }
-      if (gerenciaId && gerenciaVirtual && gerenciaArchivo) {
-        await subirFirma("gerencia", gerenciaArchivo);
       }
       setAviso("Informe guardado.");
       setComercialArchivo(null);
-      setGerenciaArchivo(null);
       setComercialQuitar(false);
-      setGerenciaQuitar(false);
       setComercialClave((valor) => valor + 1);
-      setGerenciaClave((valor) => valor + 1);
       await queryClient.invalidateQueries({ queryKey: ["gestion-reclamos", desde, hasta] });
     } catch (err) {
       setError(textoError(err, "No se pudo guardar el informe."));
@@ -372,25 +362,26 @@ export function InformeGestion() {
 
           <section className="mt-4 rounded-xl border border-line bg-card p-4">
             <h3 className="font-semibold">Firma y aprobación</h3>
-            <p className="mt-1 text-sm text-muted">La persona se elige según su perfil. La firma virtual es opcional: puede subir una imagen PNG o JPG y queda impresa en el informe.</p>
-            <div className="mt-3 grid gap-4 lg:grid-cols-2">
+            <div className="mt-3">
               <Firma
-                rol="Encargado área comercial"
-                personas={firmantes.data ?? []}
-                personaId={comercialId}
-                fecha={comercialFecha}
-                virtual={comercialVirtual}
+                rol="Subgerente comercial"
+                fija={{ nombre: SUBGERENTE_NOMBRE, cargo: "Subgerente comercial" }}
+                puedeFirmar={esSubgerente}
+                personas={[]}
+                personaId={esSubgerente ? "subgerente" : gestion.data?.comercialFirmaVirtual ? "subgerente" : ""}
+                fecha={fechaFirma(
+                  esSubgerente ? comercialVirtual : Boolean(gestion.data?.comercialFirmaVirtual),
+                  "subgerente",
+                  "subgerente",
+                  gestion.data?.comercialFecha,
+                  Boolean(gestion.data?.comercialFirmaVirtual),
+                )}
+                virtual={esSubgerente ? comercialVirtual : Boolean(gestion.data?.comercialFirmaVirtual)}
                 vista={comercialVista}
                 clave={comercialClave}
-                onPersona={(valor) => {
-                  setComercialId(valor);
-                  setComercialArchivo(null);
-                  setComercialQuitar(true);
-                  setComercialClave((actual) => actual + 1);
-                  if (!valor) setComercialVirtual(false);
-                }}
-                onFecha={setComercialFecha}
+                onPersona={() => undefined}
                 onVirtual={(valor) => {
+                  if (!esSubgerente) return;
                   setComercialVirtual(valor);
                   if (!valor) {
                     setComercialArchivo(null);
@@ -407,41 +398,6 @@ export function InformeGestion() {
                   setComercialArchivo(null);
                   setComercialQuitar(true);
                   setComercialClave((actual) => actual + 1);
-                }}
-              />
-              <Firma
-                rol="Gerencia Comercial"
-                personas={firmantes.data ?? []}
-                personaId={gerenciaId}
-                fecha={gerenciaFecha}
-                virtual={gerenciaVirtual}
-                vista={gerenciaVista}
-                clave={gerenciaClave}
-                onPersona={(valor) => {
-                  setGerenciaId(valor);
-                  setGerenciaArchivo(null);
-                  setGerenciaQuitar(true);
-                  setGerenciaClave((actual) => actual + 1);
-                  if (!valor) setGerenciaVirtual(false);
-                }}
-                onFecha={setGerenciaFecha}
-                onVirtual={(valor) => {
-                  setGerenciaVirtual(valor);
-                  if (!valor) {
-                    setGerenciaArchivo(null);
-                    setGerenciaClave((actual) => actual + 1);
-                  }
-                }}
-                onArchivo={(archivo) => elegirFirma(
-                  archivo,
-                  setGerenciaArchivo,
-                  () => setGerenciaQuitar(false),
-                  () => setGerenciaClave((actual) => actual + 1),
-                )}
-                onQuitar={() => {
-                  setGerenciaArchivo(null);
-                  setGerenciaQuitar(true);
-                  setGerenciaClave((actual) => actual + 1);
                 }}
               />
             </div>
@@ -489,6 +445,8 @@ function Estado({ valor }: { valor: string }) {
 
 function Firma({
   rol,
+  fija,
+  puedeFirmar = true,
   personas,
   personaId,
   fecha,
@@ -496,12 +454,13 @@ function Firma({
   vista,
   clave,
   onPersona,
-  onFecha,
   onVirtual,
   onArchivo,
   onQuitar,
 }: {
   rol: string;
+  fija?: { nombre: string; cargo: string };
+  puedeFirmar?: boolean;
   personas: Firmante[];
   personaId: string;
   fecha: string;
@@ -509,40 +468,49 @@ function Firma({
   vista: string;
   clave: number;
   onPersona: (valor: string) => void;
-  onFecha: (valor: string) => void;
   onVirtual: (valor: boolean) => void;
   onArchivo: (archivo: File | null) => void;
   onQuitar: () => void;
 }) {
   const elegida = personas.find((persona) => String(persona.id) === personaId);
+  const puede = Boolean(fija ? puedeFirmar : personaId);
   return (
     <div className="rounded-md border border-line p-3">
       <p className="text-sm font-semibold">{rol}</p>
-      <label className="mt-2 block text-sm font-semibold">
-        Persona asignada
-        <select className={campo} value={personaId} onChange={(evento) => onPersona(evento.target.value)}>
-          <option value="">Seleccione</option>
-          {personas.map((persona) => (
-            <option key={persona.id} value={persona.id}>
-              {persona.nombre} · {persona.cargo}
-            </option>
-          ))}
-        </select>
-      </label>
-      <p className="mt-2 text-sm text-muted">Perfil: {elegida ? `${elegida.cargo} · ${elegida.departamento}` : "Sin persona"}</p>
-      <div className="mt-2">
-        <CampoFecha id={`firma-${rol}`} label="Fecha" value={fecha} onChange={onFecha} onBlur={() => undefined} />
-      </div>
+      {fija ? (
+        <div className="mt-2 text-sm">
+          <p className="font-semibold">Persona asignada</p>
+          <p className="mt-1">{fija.nombre}</p>
+          <p className="mt-2 text-muted">Perfil: {fija.cargo}</p>
+          {!puedeFirmar && <p className="mt-2 text-muted">Solo esta cuenta puede marcar la firma.</p>}
+        </div>
+      ) : (
+        <>
+          <label className="mt-2 block text-sm font-semibold">
+            Persona asignada
+            <select className={campo} value={personaId} onChange={(evento) => onPersona(evento.target.value)}>
+              <option value="">Seleccione</option>
+              {personas.map((persona) => (
+                <option key={persona.id} value={persona.id}>
+                  {persona.nombre} · {persona.cargo}
+                </option>
+              ))}
+            </select>
+          </label>
+          <p className="mt-2 text-sm text-muted">Perfil: {elegida ? `${elegida.cargo} · ${elegida.departamento}` : "Sin persona"}</p>
+        </>
+      )}
       <label className="mt-3 flex items-center gap-2 text-sm font-semibold">
         <input
           type="checkbox"
           checked={virtual}
-          disabled={!personaId}
+          disabled={!puede}
           onChange={(evento) => onVirtual(evento.target.checked)}
         />
         Firma virtual
       </label>
-      {virtual && personaId && (
+      {fecha && <p className="mt-2 text-sm">Fecha {fecha}</p>}
+      {virtual && (fija ? puedeFirmar : personaId) && (
         <div className="mt-3">
           <label className="block text-sm font-semibold">
             Subir firma
@@ -556,16 +524,16 @@ function Firma({
           </label>
           <p className="mt-1 text-xs text-muted">PNG o JPG, hasta 1 MB. Al guardar queda en el informe.</p>
           {vista && (
-            <img src={vista} alt={`Firma de ${rol}`} className="mt-2 h-16 max-w-full rounded-md border border-line bg-white object-contain p-1" />
-          )}
-          {vista && (
             <button type="button" className="mt-2 text-sm font-semibold text-copper-dark" onClick={onQuitar}>
               Quitar firma
             </button>
           )}
         </div>
       )}
-      <p className="mt-2 text-sm text-muted">Firma: {virtual && personaId ? "Firma virtual" : "Pendiente"}</p>
+      {vista && (
+        <img src={vista} alt={`Firma de ${rol}`} className="mt-2 h-16 max-w-full rounded-md border border-line bg-white object-contain p-1" />
+      )}
+      <p className="mt-2 text-sm text-muted">Firma: {virtual ? "Firma virtual" : "Pendiente"}</p>
     </div>
   );
 }

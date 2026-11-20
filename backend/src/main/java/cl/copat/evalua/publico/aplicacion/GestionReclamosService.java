@@ -44,6 +44,9 @@ public class GestionReclamosService {
   static final String CUMPLE = "Cumple";
   static final String NO_CUMPLE = "No cumple";
   static final String SIN_DATOS = "Sin datos";
+  static final String SUBGERENTE_CORREO = "hugomunoz@copat.cl";
+  static final String SUBGERENTE_NOMBRE = "Hugo Muñoz";
+  static final String SUBGERENTE_CARGO = "Subgerente comercial";
   private static final String SIN_AREA = "Sin área";
   private static final int FIRMA_MAX = 1_000_000;
 
@@ -91,10 +94,13 @@ public class GestionReclamosService {
     }
     Periodo periodo = periodo(request.desde(), request.hasta());
     Texto texto = texto(request);
-    Firma comercial = firmar(request.comercialUsuarioId(), request.comercialFecha(), request.comercialFirmaVirtual(), "comercialUsuarioId", "comercialFecha");
-    Firma gerencia = firmar(request.gerenciaUsuarioId(), request.gerenciaFecha(), request.gerenciaFirmaVirtual(), "gerenciaUsuarioId", "gerenciaFecha");
-    InformeGestion informe = informes.findByPeriodoInicioAndPeriodoFin(periodo.inicio(), periodo.fin())
-        .orElseGet(() -> new InformeGestion(periodo.inicio(), periodo.fin()));
+    InformeGestion informe = informes.findByPeriodoInicioAndPeriodoFin(periodo.inicio(), periodo.fin()).orElse(null);
+    boolean esHugo = esSubgerente(principal);
+    Firma comercial = firmarComercial(request.comercialFirmaVirtual(), informe, esHugo);
+    Firma gerencia = firmar(request.gerenciaUsuarioId(), request.gerenciaFirmaVirtual(), "gerenciaUsuarioId", informe, false);
+    if (informe == null) {
+      informe = new InformeGestion(periodo.inicio(), periodo.fin());
+    }
     informe.completar(
         texto.responsable(),
         texto.cargo(),
@@ -113,7 +119,7 @@ public class GestionReclamosService {
         gerencia.cargo(),
         gerencia.fecha(),
         gerencia.virtual());
-    if (!comercial.virtual() || request.comercialQuitarFirma()) {
+    if (esHugo && (!comercial.virtual() || request.comercialQuitarFirma())) {
       informe.quitarFirmaComercial();
     }
     if (!gerencia.virtual() || request.gerenciaQuitarFirma()) {
@@ -131,6 +137,9 @@ public class GestionReclamosService {
     InformeGestion informe = informes.findByPeriodoInicioAndPeriodoFin(periodo.inicio(), periodo.fin())
         .orElseThrow(() -> new ReglaNegocioException(Mensajes.GESTION_FIRMA_PREVIA));
     boolean esComercial = esComercial(rol);
+    if (esComercial && !esSubgerente(principal)) {
+      throw new ReglaNegocioException(Mensajes.REVISE, Map.of("archivo", Mensajes.GESTION_SUBGERENTE));
+    }
     if (esComercial ? !informe.isComercialFirmaVirtual() : !informe.isGerenciaFirmaVirtual()) {
       throw new ReglaNegocioException(Mensajes.REVISE, Map.of("archivo", Mensajes.GESTION_FIRMA_PREVIA));
     }
@@ -164,10 +173,9 @@ public class GestionReclamosService {
     Periodo periodo = periodo(desde, hasta);
     InformeGestion guardado = informes.findByPeriodoInicioAndPeriodoFin(periodo.inicio(), periodo.fin()).orElse(null);
     GestionReclamosResponse datos = armar(periodo, guardado);
-    byte[] comercial = guardado != null && guardado.isComercialFirmaVirtual() ? guardado.getComercialFirma() : null;
-    byte[] gerencia = guardado != null && guardado.isGerenciaFirmaVirtual() ? guardado.getGerenciaFirma() : null;
+    byte[] comercial = firmaSubgerente(guardado) ? guardado.getComercialFirma() : null;
     String nombre = InformeGestionPdf.nombreArchivo(datos.desde(), datos.hasta());
-    return new ArchivoDescarga(nombre, "application/pdf", InformeGestionPdf.generar(datos, comercial, gerencia));
+    return new ArchivoDescarga(nombre, "application/pdf", InformeGestionPdf.generar(datos, comercial));
   }
 
   private GestionReclamosResponse armar(Periodo periodo, InformeGestion informe) {
@@ -178,7 +186,7 @@ public class GestionReclamosService {
         .toList();
     int total = delPeriodo.size();
     Map<String, Integer> tipos = contar(delPeriodo.stream().map(Reclamo::getTipo).toList());
-    Map<String, Integer> areas = contar(delPeriodo.stream().map(this::area).toList());
+    List<Corte> porArea = porcentajesDeArea(delPeriodo.stream().map(Reclamo::getAreaResponsable).toList());
     int reincidentes = reincidentes(delPeriodo);
     int cerradosEnPlazo = 0;
     long sumaDias = 0;
@@ -199,14 +207,15 @@ public class GestionReclamosService {
     String tiempo = cerrados == 0 ? "—" : decimal(sumaDias / (double) cerrados);
     String principales = causas(tipos, total);
     String causasRecurrentes = recurrentes(tipos, total);
-    String areasFrecuencia = areasMayores(areas, total);
+    String areasFrecuencia = areasMayores(porArea);
     String cumplimiento = cumplimiento(total, porcentajeCierre, tiempo);
+    boolean subgerente = firmaSubgerente(informe);
     return new GestionReclamosResponse(
         Fechas.format(periodo.inicio()),
         Fechas.format(periodo.fin()),
         total,
         cortes(tipos, total),
-        cortes(areas, total),
+        porArea,
         reincidentes,
         porcentajeReincidentes,
         estadoTope(total, reincidentes, 5),
@@ -224,17 +233,17 @@ public class GestionReclamosService {
         areasFrecuencia,
         informe == null ? null : informe.getEfectividad(),
         informe == null ? null : informe.getConclusiones(),
-        informe == null ? null : informe.getComercialNombre(),
-        informe == null ? null : informe.getComercialCargo(),
-        informe == null || informe.getComercial() == null ? null : informe.getComercial().getId(),
-        informe == null || informe.getComercialFecha() == null ? null : Fechas.format(informe.getComercialFecha()),
-        informe != null && informe.isComercialFirmaVirtual(),
+        SUBGERENTE_NOMBRE,
+        SUBGERENTE_CARGO,
+        subgerente ? informe.getComercial().getId() : null,
+        subgerente && informe.getComercialFecha() != null ? Fechas.format(informe.getComercialFecha()) : null,
+        subgerente,
         informe == null ? null : informe.getGerenciaNombre(),
         informe == null ? null : informe.getGerenciaCargo(),
         informe == null || informe.getGerencia() == null ? null : informe.getGerencia().getId(),
         informe == null || informe.getGerenciaFecha() == null ? null : Fechas.format(informe.getGerenciaFecha()),
         informe != null && informe.isGerenciaFirmaVirtual(),
-        informe != null && informe.tieneFirmaComercial(),
+        subgerente && informe.tieneFirmaComercial(),
         informe != null && informe.tieneFirmaGerencia());
   }
 
@@ -253,9 +262,26 @@ public class GestionReclamosService {
     return repetidos;
   }
 
-  private String area(Reclamo reclamo) {
-    String area = reclamo.getAreaResponsable();
-    return area == null || area.isBlank() ? SIN_AREA : area.trim();
+  static List<Corte> porcentajesDeArea(List<String> guardadas) {
+    List<String> seleccionadas = new ArrayList<>();
+    for (String guardada : guardadas) {
+      seleccionadas.addAll(separarArea(guardada));
+    }
+    return cortes(contar(seleccionadas), seleccionadas.size());
+  }
+
+  static List<String> separarArea(String area) {
+    if (area == null || area.isBlank()) {
+      return List.of(SIN_AREA);
+    }
+    List<String> partes = new ArrayList<>();
+    for (String parte : area.split(",")) {
+      String limpia = parte.trim();
+      if (!limpia.isEmpty()) {
+        partes.add(limpia);
+      }
+    }
+    return partes.isEmpty() ? List.of(SIN_AREA) : partes;
   }
 
   private static Map<String, Integer> contar(List<String> nombres) {
@@ -296,11 +322,10 @@ public class GestionReclamosService {
     return String.join("\n", lineas);
   }
 
-  private static String areasMayores(Map<String, Integer> areas, int total) {
-    if (total == 0) {
+  private static String areasMayores(List<Corte> orden) {
+    if (orden.isEmpty()) {
       return "No hay reclamos en el periodo.";
     }
-    List<Corte> orden = cortes(areas, total);
     int maximo = orden.getFirst().cantidad();
     List<String> lineas = new ArrayList<>();
     orden.stream()
@@ -438,7 +463,48 @@ public class GestionReclamosService {
     throw new ReglaNegocioException(Mensajes.REVISE, Map.of("archivo", Mensajes.GESTION_FIRMA));
   }
 
-  private Firma firmar(Long id, String fechaTexto, boolean virtual, String campoPersona, String campoFecha) {
+  private Firma firmarComercial(boolean virtual, InformeGestion actual, boolean esHugo) {
+    if (!esHugo) {
+      return comercialGuardada(actual);
+    }
+    if (!virtual) {
+      return Firma.vacia();
+    }
+    Usuario usuario = usuarios.findByEmailIgnoreCase(SUBGERENTE_CORREO)
+        .filter(Usuario::isActivo)
+        .orElseThrow(() -> new ReglaNegocioException(Mensajes.REVISE, Map.of("comercialUsuarioId", Mensajes.GESTION_SUBGERENTE)));
+    Usuario anterior = actual == null ? null : actual.getComercial();
+    boolean yaFirmaba = actual != null && actual.isComercialFirmaVirtual();
+    LocalDate anteriorFecha = actual == null ? null : actual.getComercialFecha();
+    boolean mismaFirma = yaFirmaba && anteriorFecha != null && anterior != null && usuario.getId().equals(anterior.getId());
+    LocalDate dia = mismaFirma ? anteriorFecha : LocalDate.now(reloj);
+    return new Firma(usuario, SUBGERENTE_NOMBRE, SUBGERENTE_CARGO, dia, true);
+  }
+
+  private static Firma comercialGuardada(InformeGestion actual) {
+    if (actual == null) {
+      return Firma.vacia();
+    }
+    return new Firma(
+        actual.getComercial(),
+        actual.getComercialNombre(),
+        actual.getComercialCargo(),
+        actual.getComercialFecha(),
+        actual.isComercialFirmaVirtual());
+  }
+
+  private static boolean firmaSubgerente(InformeGestion informe) {
+    return informe != null
+        && informe.isComercialFirmaVirtual()
+        && informe.getComercial() != null
+        && SUBGERENTE_CORREO.equalsIgnoreCase(informe.getComercial().getEmail());
+  }
+
+  private static boolean esSubgerente(UsuarioPrincipal principal) {
+    return principal.email() != null && SUBGERENTE_CORREO.equalsIgnoreCase(principal.email());
+  }
+
+  private Firma firmar(Long id, boolean virtual, String campoPersona, InformeGestion actual, boolean comercial) {
     if (id == null) {
       if (virtual) {
         throw new ReglaNegocioException(Mensajes.REVISE, Map.of(campoPersona, Mensajes.GESTION_FIRMANTE));
@@ -448,12 +514,15 @@ public class GestionReclamosService {
     Usuario usuario = usuarios.findById(id)
         .filter(Usuario::isActivo)
         .orElseThrow(() -> new ReglaNegocioException(Mensajes.REVISE, Map.of(campoPersona, Mensajes.GESTION_FIRMANTE)));
-    String fecha = fechaTexto == null ? "" : fechaTexto.trim();
-    if (!fecha.isEmpty() && !Fechas.esValida(fecha)) {
-      throw new ReglaNegocioException(Mensajes.REVISE, Map.of(campoFecha, Mensajes.GESTION_FECHA));
+    if (!virtual) {
+      return new Firma(usuario, usuario.getNombre(), usuario.getCargo(), null, false);
     }
-    LocalDate dia = fecha.isEmpty() ? (virtual ? LocalDate.now(reloj) : null) : Fechas.parse(fecha);
-    return new Firma(usuario, usuario.getNombre(), usuario.getCargo(), dia, virtual);
+    Usuario anterior = actual == null ? null : (comercial ? actual.getComercial() : actual.getGerencia());
+    boolean yaFirmaba = actual != null && (comercial ? actual.isComercialFirmaVirtual() : actual.isGerenciaFirmaVirtual());
+    LocalDate anteriorFecha = actual == null ? null : (comercial ? actual.getComercialFecha() : actual.getGerenciaFecha());
+    boolean mismaFirma = yaFirmaba && anteriorFecha != null && anterior != null && id.equals(anterior.getId());
+    LocalDate dia = mismaFirma ? anteriorFecha : LocalDate.now(reloj);
+    return new Firma(usuario, usuario.getNombre(), usuario.getCargo(), dia, true);
   }
 
   private static void largo(Map<String, String> campos, String clave, String valor, int maximo, String mensaje) {

@@ -25,6 +25,10 @@ public final class Fechas {
     }
   }
 
+  public static boolean esHoyOAnterior(String valor, LocalDate hoy) {
+    return esValida(valor) && !parse(valor).isAfter(hoy);
+  }
+
   public static LocalDate parse(String valor) {
     return LocalDate.parse(valor, FORMATO);
   }

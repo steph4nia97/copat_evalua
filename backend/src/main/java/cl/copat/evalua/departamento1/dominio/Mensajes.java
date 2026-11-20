@@ -77,6 +77,7 @@ public final class Mensajes {
   public static final String RECLAMO_TELEFONO = "Ingrese un teléfono chileno.";
   public static final String RECLAMO_OBRA = "Ingrese el nombre de la obra, con un máximo de 200 caracteres.";
   public static final String RECLAMO_FECHA = "Ingrese la fecha del servicio en formato dd/mm/aaaa.";
+  public static final String RECLAMO_FECHA_FUTURA = "La fecha del servicio no puede ser posterior a hoy.";
   public static final String RECLAMO_EMPRESA = "Ingrese la empresa, con un máximo de 150 caracteres.";
   public static final String RECLAMO_UBICACION = "Ingrese la ubicación, con un máximo de 200 caracteres.";
   public static final String RECLAMO_GUIA = "La guía de despacho admite como máximo 40 caracteres.";
@@ -101,6 +102,7 @@ public final class Mensajes {
   public static final String GESTION_CONCLUSIONES = "Las conclusiones y acciones de mejora admiten como máximo 2000 caracteres.";
   public static final String GESTION_FECHA = "Ingrese la fecha de la firma en formato dd/mm/aaaa.";
   public static final String GESTION_FIRMANTE = "Seleccione una persona activa según su perfil.";
+  public static final String GESTION_SUBGERENTE = "Solo Hugo Muñoz puede firmar como subgerente comercial, con hugomunoz@copat.cl.";
   public static final String GESTION_FIRMA = "La firma debe ser una imagen PNG o JPG de hasta 1 MB.";
   public static final String GESTION_FIRMA_PREVIA = "Marque la firma virtual y guarde el informe antes de subir el archivo.";
   public static final String EXCEL = "Adjunte un archivo Excel (.xlsx).";

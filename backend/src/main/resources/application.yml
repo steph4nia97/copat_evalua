@@ -31,6 +31,6 @@ server:
 
 copat:
   zona: America/Santiago
-  publica: http://localhost:5173
+  publica: ${COPAT_PUBLICA:http://localhost:5173}
   correo:
     desde: evaluaciones@copat.cl

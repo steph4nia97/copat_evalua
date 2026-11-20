@@ -7,6 +7,7 @@ import cl.copat.evalua.departamento3.aplicacion.Departamento3Service;
 import cl.copat.evalua.departamento3.api.IndicadorResponse;
 import cl.copat.evalua.departamento3.api.AccionRequest;
 import cl.copat.evalua.departamento3.api.ConclusionesRequest;
+import cl.copat.evalua.publico.api.EnlaceReclamoResponse;
 import cl.copat.evalua.publico.api.FirmanteResponse;
 import cl.copat.evalua.publico.api.GestionReclamosRequest;
 import cl.copat.evalua.publico.api.GestionReclamosResponse;
@@ -99,6 +100,11 @@ public class Departamento3Controller {
   @GetMapping("/indicadores")
   public List<IndicadorResponse> indicadores(Authentication authentication) {
     return servicio.indicadores(principal(authentication));
+  }
+
+  @GetMapping("/reclamos/enlace")
+  public EnlaceReclamoResponse enlaceReclamo(Authentication authentication) {
+    return new EnlaceReclamoResponse(reclamoServicio.enlacePublico(principal(authentication)));
   }
 
   @GetMapping("/reclamos")

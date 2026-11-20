@@ -206,6 +206,9 @@ class EnlacePublicoIntegracionTest {
         .isEqualTo("56912345678");
 
     MockHttpSession depto3 = ingresar("semilla3@copat.cl", "semilla3");
+    JsonNode enlace = json.readTree(mockMvc.perform(get("/api/departamento3/reclamos/enlace").session(depto3))
+        .andReturn().getResponse().getContentAsString());
+    assertThat(enlace.get("enlace").asText()).isEqualTo("http://localhost:5173/reclamo");
     JsonNode lista = json.readTree(mockMvc.perform(get("/api/departamento3/reclamos").session(depto3))
         .andReturn().getResponse().getContentAsString());
     assertThat(lista).hasSize(1);
@@ -213,6 +216,8 @@ class EnlacePublicoIntegracionTest {
 
     MockHttpSession depto2 = ingresar("semilla2@copat.cl", "semilla2");
     assertThat(mockMvc.perform(get("/api/departamento3/reclamos").session(depto2))
+        .andReturn().getResponse().getStatus()).isEqualTo(403);
+    assertThat(mockMvc.perform(get("/api/departamento3/reclamos/enlace").session(depto2))
         .andReturn().getResponse().getStatus()).isEqualTo(403);
   }
 
@@ -250,6 +255,7 @@ class EnlacePublicoIntegracionTest {
                 "sede", "Antofagasta"))))
         .andReturn();
     assertThat(cerrado.getResponse().getStatus()).isEqualTo(200);
+    String horaCierre = json.readTree(cerrado.getResponse().getContentAsString()).get("horaCierre").asText();
 
     MvcResult informe = mockMvc.perform(get("/api/departamento3/reclamos/" + id + "/informe").session(depto3))
         .andReturn();
@@ -265,7 +271,7 @@ class EnlacePublicoIntegracionTest {
       assertThat(texto).contains("Calidad del hormigón");
       assertThat(texto).contains("Antofagasta");
       assertThat(texto).contains("Se repuso el despacho.");
-      assertThat(texto).contains("10:30");
+      assertThat(texto).contains(horaCierre);
     }
   }
 
@@ -295,7 +301,10 @@ class EnlacePublicoIntegracionTest {
             .content(json.writeValueAsString(seguimiento)))
         .andReturn();
     assertThat(gestion.getResponse().getStatus()).isEqualTo(200);
-    assertThat(json.readTree(gestion.getResponse().getContentAsString()).get("estado").asText()).isEqualTo("En gestión");
+    JsonNode enGestion = json.readTree(gestion.getResponse().getContentAsString());
+    assertThat(enGestion.get("estado").asText()).isEqualTo("En gestión");
+    assertThat(enGestion.get("fechaGestion").asText()).matches("\\d{2}/\\d{2}/\\d{4}");
+    assertThat(enGestion.get("fechaCierre").isNull()).isTrue();
 
     seguimiento.put("estado", "Recibido");
     seguimiento.put("solucion", "Se repuso el despacho.");
@@ -307,7 +316,11 @@ class EnlacePublicoIntegracionTest {
             .content(json.writeValueAsString(seguimiento)))
         .andReturn();
     assertThat(cerrado.getResponse().getStatus()).isEqualTo(200);
-    assertThat(json.readTree(cerrado.getResponse().getContentAsString()).get("estado").asText()).isEqualTo("Cerrado");
+    JsonNode cerradoJson = json.readTree(cerrado.getResponse().getContentAsString());
+    assertThat(cerradoJson.get("estado").asText()).isEqualTo("Cerrado");
+    assertThat(cerradoJson.get("fechaGestion").asText()).isEqualTo(enGestion.get("fechaGestion").asText());
+    assertThat(cerradoJson.get("fechaCierre").asText()).matches("\\d{2}/\\d{2}/\\d{4}");
+    assertThat(cerradoJson.get("horaCierre").asText()).matches("\\d{2}:\\d{2}");
   }
 
   @Test
@@ -374,9 +387,10 @@ class EnlacePublicoIntegracionTest {
     escrito.put("responsable", "Semilla Tres");
     escrito.put("cargo", "Control Calidad");
     escrito.put("conclusiones", "Reforzar el control de consistencia.");
-    escrito.put("comercialUsuarioId", semilla3);
-    escrito.put("comercialFecha", "19/11/2026");
     escrito.put("comercialFirmaVirtual", true);
+    escrito.put("gerenciaUsuarioId", semilla3);
+    escrito.put("gerenciaFecha", "19/11/2026");
+    escrito.put("gerenciaFirmaVirtual", true);
     MvcResult guardado = mockMvc.perform(put("/api/departamento3/reclamos/gestion")
             .session(depto3)
             .cookie(csrf)
@@ -387,9 +401,13 @@ class EnlacePublicoIntegracionTest {
     assertThat(guardado.getResponse().getStatus()).isEqualTo(200);
     JsonNode guardadoJson = json.readTree(guardado.getResponse().getContentAsString());
     assertThat(guardadoJson.get("conclusiones").asText()).isEqualTo("Reforzar el control de consistencia.");
-    assertThat(guardadoJson.get("comercialNombre").asText()).isEqualTo("Semilla Tres");
-    assertThat(guardadoJson.get("comercialCargo").asText()).isEqualTo("Por asignar");
-    assertThat(guardadoJson.get("comercialFirmaVirtual").asBoolean()).isTrue();
+    assertThat(guardadoJson.get("comercialNombre").asText()).isEqualTo("Hugo Muñoz");
+    assertThat(guardadoJson.get("comercialCargo").asText()).isEqualTo("Subgerente comercial");
+    assertThat(guardadoJson.get("comercialFirmaVirtual").asBoolean()).isFalse();
+    assertThat(guardadoJson.get("gerenciaNombre").asText()).isEqualTo("Semilla Tres");
+    assertThat(guardadoJson.get("gerenciaCargo").asText()).isEqualTo("Por asignar");
+    assertThat(guardadoJson.get("gerenciaFirmaVirtual").asBoolean()).isTrue();
+    assertThat(guardadoJson.get("gerenciaFecha").asText()).matches("\\d{2}/\\d{2}/\\d{4}");
 
     MvcResult informe = mockMvc.perform(get("/api/departamento3/reclamos/gestion/informe")
             .param("desde", "01/01/2020")
@@ -403,8 +421,10 @@ class EnlacePublicoIntegracionTest {
       assertThat(texto).contains("D-SIG-09-03");
       assertThat(texto).contains("50,0");
       assertThat(texto).contains("Reforzar el control de consistencia.");
-      assertThat(texto).contains("Firma virtual");
-      assertThat(texto).contains("Por asignar");
+      assertThat(texto).contains("Subgerente comercial");
+      assertThat(texto).contains("Hugo Muñoz");
+      assertThat(texto).doesNotContain("Gerencia Comercial");
+      assertThat(texto).contains("Pendiente");
       assertThat(imagenes(documento)).isZero();
     }
 
@@ -412,7 +432,7 @@ class EnlacePublicoIntegracionTest {
             .file(new MockMultipartFile("archivo", "firma.txt", "text/plain", "hola".getBytes()))
             .param("desde", "01/01/2020")
             .param("hasta", "31/12/2030")
-            .param("rol", "comercial")
+            .param("rol", "gerencia")
             .session(depto3)
             .cookie(csrf)
             .header("X-XSRF-TOKEN", csrf.getValue()))
@@ -426,18 +446,18 @@ class EnlacePublicoIntegracionTest {
             .file(new MockMultipartFile("archivo", "firma.png", "image/png", pngSalida.toByteArray()))
             .param("desde", "01/01/2020")
             .param("hasta", "31/12/2030")
-            .param("rol", "comercial")
+            .param("rol", "gerencia")
             .session(depto3)
             .cookie(csrf)
             .header("X-XSRF-TOKEN", csrf.getValue()))
         .andReturn();
     assertThat(subida.getResponse().getStatus()).isEqualTo(200);
-    assertThat(json.readTree(subida.getResponse().getContentAsString()).get("comercialTieneFirma").asBoolean()).isTrue();
+    assertThat(json.readTree(subida.getResponse().getContentAsString()).get("gerenciaTieneFirma").asBoolean()).isTrue();
 
     MvcResult archivo = mockMvc.perform(get("/api/departamento3/reclamos/gestion/firma")
             .param("desde", "01/01/2020")
             .param("hasta", "31/12/2030")
-            .param("rol", "comercial")
+            .param("rol", "gerencia")
             .session(depto3))
         .andReturn();
     assertThat(archivo.getResponse().getStatus()).isEqualTo(200);
@@ -449,11 +469,11 @@ class EnlacePublicoIntegracionTest {
             .session(depto3))
         .andReturn();
     try (PDDocument documento = Loader.loadPDF(conFirma.getResponse().getContentAsByteArray())) {
-      assertThat(imagenes(documento)).isEqualTo(1);
+      assertThat(imagenes(documento)).isZero();
     }
 
-    escrito.put("comercialFirmaVirtual", false);
-    escrito.put("comercialQuitarFirma", true);
+    escrito.put("gerenciaFirmaVirtual", false);
+    escrito.put("gerenciaQuitarFirma", true);
     MvcResult sinFirma = mockMvc.perform(put("/api/departamento3/reclamos/gestion")
             .session(depto3)
             .cookie(csrf)
@@ -462,7 +482,7 @@ class EnlacePublicoIntegracionTest {
             .content(json.writeValueAsString(escrito)))
         .andReturn();
     assertThat(sinFirma.getResponse().getStatus()).isEqualTo(200);
-    assertThat(json.readTree(sinFirma.getResponse().getContentAsString()).get("comercialTieneFirma").asBoolean()).isFalse();
+    assertThat(json.readTree(sinFirma.getResponse().getContentAsString()).get("gerenciaTieneFirma").asBoolean()).isFalse();
 
     MockHttpSession depto1 = ingresar("semilla1@copat.cl", "semilla1");
     assertThat(mockMvc.perform(get("/api/departamento3/reclamos/gestion")

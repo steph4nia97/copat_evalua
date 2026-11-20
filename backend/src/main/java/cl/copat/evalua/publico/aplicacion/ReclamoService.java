@@ -22,10 +22,10 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -40,11 +40,24 @@ public class ReclamoService {
   private final ReclamoRepository reclamos;
   private final SedeRepository sedes;
   private final Clock reloj;
+  private final String publica;
 
-  public ReclamoService(ReclamoRepository reclamos, SedeRepository sedes, Clock reloj) {
+  public ReclamoService(
+      ReclamoRepository reclamos,
+      SedeRepository sedes,
+      Clock reloj,
+      @Value("${copat.publica}") String publica) {
     this.reclamos = reclamos;
     this.sedes = sedes;
     this.reloj = reloj;
+    this.publica = publica.endsWith("/") ? publica.substring(0, publica.length() - 1) : publica;
+  }
+
+  public String enlacePublico(UsuarioPrincipal principal) {
+    if (principal.departamentoId() != Catalogo.DEPARTAMENTO_3) {
+      throw new ResponseStatusException(HttpStatus.FORBIDDEN, Mensajes.PROHIBIDO);
+    }
+    return publica + "/reclamo";
   }
 
   @Transactional
@@ -77,6 +90,8 @@ public class ReclamoService {
     }
     if (!Fechas.esValida(fecha)) {
       campos.put("fechaServicio", Mensajes.RECLAMO_FECHA);
+    } else if (!Fechas.esHoyOAnterior(fecha, LocalDate.now(reloj))) {
+      campos.put("fechaServicio", Mensajes.RECLAMO_FECHA_FUTURA);
     }
     if (empresa.isEmpty() || empresa.length() > 150) {
       campos.put("empresa", Mensajes.RECLAMO_EMPRESA);
@@ -175,13 +190,10 @@ public class ReclamoService {
     Map<String, String> campos = new LinkedHashMap<>();
     String area = texto(request.area());
     String responsable = texto(request.responsable());
-    String gestion = texto(request.fechaGestion());
     String observaciones = texto(request.observaciones());
-    String cierre = texto(request.fechaCierre());
-    String hora = texto(request.horaCierre());
     String solucion = texto(request.solucion());
     String sedeNombre = texto(request.sede());
-    String estado = estadoAutomatico(observaciones, cierre, hora, solucion);
+    String estado = estadoAutomatico(observaciones, solucion);
     boolean gestiona = !ReclamoCatalogo.ESTADO_RECIBIDO.equals(estado);
     boolean cierra = ReclamoCatalogo.ESTADO_CERRADO.equals(estado);
     if (gestiona && (area.isEmpty() || area.length() > 80)) {
@@ -194,11 +206,6 @@ public class ReclamoService {
     } else if (responsable.length() > 80) {
       campos.put("responsable", Mensajes.RECLAMO_RESPONSABLE);
     }
-    if (gestiona && !Fechas.esValida(gestion)) {
-      campos.put("fechaGestion", Mensajes.RECLAMO_GESTION);
-    } else if (!gestion.isEmpty() && !Fechas.esValida(gestion)) {
-      campos.put("fechaGestion", Mensajes.RECLAMO_GESTION);
-    }
     if (observaciones.length() > 500) {
       campos.put("observaciones", Mensajes.RECLAMO_OBS);
     }
@@ -206,17 +213,6 @@ public class ReclamoService {
       campos.put("solucion", Mensajes.RECLAMO_SOLUCION);
     } else if (solucion.length() > 1000) {
       campos.put("solucion", Mensajes.RECLAMO_SOLUCION);
-    }
-    if (!cierre.isEmpty() && !Fechas.esValida(cierre)) {
-      campos.put("fechaCierre", Mensajes.RECLAMO_CIERRE);
-    }
-    LocalTime horaCierre = null;
-    if (!hora.isEmpty()) {
-      try {
-        horaCierre = LocalTime.parse(hora, HORA);
-      } catch (DateTimeParseException ex) {
-        campos.put("horaCierre", Mensajes.RECLAMO_HORA);
-      }
     }
     Sede sede = null;
     if (gestiona && sedeNombre.isEmpty()) {
@@ -231,18 +227,20 @@ public class ReclamoService {
       throw new ReglaNegocioException(Mensajes.REVISE, campos);
     }
     LocalDateTime ahora = LocalDateTime.now(reloj);
-    LocalDate fechaCierre = cierre.isEmpty() ? null : Fechas.parse(cierre);
-    if (cierra && fechaCierre == null) {
-      fechaCierre = ahora.toLocalDate();
-    }
-    if (cierra && horaCierre == null) {
-      horaCierre = ahora.toLocalTime().withNano(0);
-    }
+    LocalDate fechaGestion = gestiona
+        ? (reclamo.getFechaGestion() == null ? ahora.toLocalDate() : reclamo.getFechaGestion())
+        : null;
+    LocalDate fechaCierre = cierra
+        ? (reclamo.getFechaCierre() == null ? ahora.toLocalDate() : reclamo.getFechaCierre())
+        : null;
+    LocalTime horaCierre = cierra
+        ? (reclamo.getHoraCierre() == null ? ahora.toLocalTime().withNano(0) : reclamo.getHoraCierre())
+        : null;
     reclamo.registrarSeguimiento(
         estado,
         area.isEmpty() ? null : area,
         responsable.isEmpty() ? null : responsable,
-        gestion.isEmpty() ? null : Fechas.parse(gestion),
+        fechaGestion,
         observaciones.isEmpty() ? null : observaciones,
         fechaCierre,
         horaCierre,
@@ -301,8 +299,8 @@ public class ReclamoService {
     return new InformeReclamo.Fila(seccion, etiqueta, valor);
   }
 
-  private static String estadoAutomatico(String observaciones, String cierre, String hora, String solucion) {
-    if (!cierre.isEmpty() || !hora.isEmpty() || !solucion.isEmpty()) {
+  private static String estadoAutomatico(String observaciones, String solucion) {
+    if (!solucion.isEmpty()) {
       return ReclamoCatalogo.ESTADO_CERRADO;
     }
     if (!observaciones.isEmpty()) {

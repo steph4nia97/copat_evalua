@@ -7,6 +7,7 @@ import cl.copat.evalua.departamento1.dominio.NoAplica;
 import cl.copat.evalua.departamento1.dominio.NombreEmpresa;
 import cl.copat.evalua.departamento1.dominio.Rut;
 import cl.copat.evalua.departamento1.dominio.TelefonoChile;
+import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
 class ReglasDepartamento1Test {
@@ -75,5 +76,10 @@ class ReglasDepartamento1Test {
     assertThat(Fechas.esValida("2026-01-01")).isFalse();
     assertThat(Fechas.esValida("1/1/2026")).isFalse();
     assertThat(Fechas.parse("31/01/2026").isAfter(Fechas.parse("01/01/2026"))).isTrue();
+    LocalDate hoy = LocalDate.of(2026, 11, 20);
+    assertThat(Fechas.esHoyOAnterior("20/11/2026", hoy)).isTrue();
+    assertThat(Fechas.esHoyOAnterior("19/11/2026", hoy)).isTrue();
+    assertThat(Fechas.esHoyOAnterior("21/11/2026", hoy)).isFalse();
+    assertThat(Fechas.esHoyOAnterior("32/11/2026", hoy)).isFalse();
   }
 }

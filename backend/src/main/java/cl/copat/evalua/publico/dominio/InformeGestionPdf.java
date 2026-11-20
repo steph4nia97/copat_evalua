@@ -29,7 +29,7 @@ public final class InformeGestionPdf {
     return "D-SIG-09-03-" + desde.replace("/", "-") + "_" + hasta.replace("/", "-") + ".pdf";
   }
 
-  public static byte[] generar(GestionReclamosResponse datos, byte[] firmaComercial, byte[] firmaGerencia) {
+  public static byte[] generar(GestionReclamosResponse datos, byte[] firmaComercial) {
     try (PDDocument documento = new PDDocument()) {
       PDFont fuente = fuente(documento);
       Pagina pagina = new Pagina(documento, fuente, fuente instanceof PDType0Font);
@@ -66,10 +66,8 @@ public final class InformeGestionPdf {
       pagina.parrafo(valor(datos.conclusiones()), 10);
       pagina.espacio(6);
       pagina.linea("Firma y aprobación", 12);
-      pagina.parrafo(firma("Encargado área comercial", datos.comercialNombre(), datos.comercialCargo(), datos.comercialFecha(), datos.comercialFirmaVirtual()), 10);
+      pagina.parrafo(firma("Subgerente comercial", datos.comercialNombre(), datos.comercialCargo(), datos.comercialFecha(), datos.comercialFirmaVirtual()), 10);
       pagina.firmaImagen(datos.comercialFirmaVirtual() ? firmaComercial : null);
-      pagina.parrafo(firma("Gerencia Comercial", datos.gerenciaNombre(), datos.gerenciaCargo(), datos.gerenciaFecha(), datos.gerenciaFirmaVirtual()), 10);
-      pagina.firmaImagen(datos.gerenciaFirmaVirtual() ? firmaGerencia : null);
       ByteArrayOutputStream salida = new ByteArrayOutputStream();
       documento.save(salida);
       return salida.toByteArray();
